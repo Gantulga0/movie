@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+:root {
+  --background: #08080a;
+  --foreground: #f5f5f7;
+  --surface: #14141b;
+  --surface-raised: #1c1c25;
+  --line: rgba(255, 255, 255, 0.08);
+  --brand: #e50914;
+  --brand-hover: #f6121d;
+  --gold: #f5c518;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-gold: var(--gold);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-oswald);
+}
+
+html {
+  /* Native form controls (select dropdowns, date pickers, scrollbars)
+     render in dark mode instead of the OS-default white. */
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+select option {
+  background-color: var(--surface-raised);
+  color: var(--foreground);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Display headings: cinematic condensed uppercase */
+.display {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Full-screen carousel cross-fade */
+@keyframes mnflix-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mnflix-kenburns {
+  from {
+    transform: scale(1.05);
+  }
+  to {
+    transform: scale(1.16);
+  }
+}
+
+.animate-fade {
+  animation: mnflix-fade 0.9s ease forwards;
+}
+
+.animate-kenburns {
+  animation: mnflix-kenburns 8s ease-out forwards;
+}
+
+@keyframes mnflix-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise {
+  animation: mnflix-rise 0.7s ease forwards;
+}
+
+/* Ticket-stub plan card: perforated edge between stub and body */
+.ticket-notch {
+  --notch: 11px;
+  -webkit-mask:
+    radial-gradient(circle var(--notch) at left 50%, transparent 98%, #000) left /
+      51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at right 50%, transparent 98%, #000)
+      right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle var(--notch) at left 50%, transparent 98%, #000) left /
+      51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at right 50%, transparent 98%, #000)
+      right / 51% 100% no-repeat;
+}
+
+.ticket-perforation {
+  background-image: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0.25) 40%,
+    transparent 40%
+  );
+  background-size: 10px 1px;
+  background-repeat: repeat-x;
+  background-position: center;
+}
+
+/* Hide scrollbars on horizontal rows while keeping them scrollable */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade,
+  .animate-kenburns,
+  .animate-rise {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}

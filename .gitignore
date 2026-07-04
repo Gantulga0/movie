@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Builds
+dist/
+.next/
+out/
+build/
+
+# Environment — secrets never reach the repo
+.env
+.env.local
+.env.*.local
+
+# Admin-uploaded media (local storage mode) — user content, not source
+frontend/public/uploads/
+
+# Misc
+*.log
+.DS_Store
+.vscode/
+.idea/

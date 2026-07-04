@@ -1,0 +1,377 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Users & auth
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String  @id @default(uuid())
+  // 6-digit human-facing id admins use to look up and filter accounts.
+  publicId     String  @unique
+  // Phone number is the primary identifier; email is optional extra contact.
+  phone        String  @unique
+  email        String? @unique
+  passwordHash String
+  name         String?
+  role         Role    @default(USER)
+  avatarUrl    String?
+
+  // Account stays unusable until the email/phone is confirmed via OTP.
+  verified Boolean @default(false)
+
+  watchHistory  WatchHistory[]
+  watchlist     Watchlist[]
+  ratings       Rating[]
+  subscriptions Subscription[]
+  payments      Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([publicId])
+}
+
+enum OtpChannel {
+  EMAIL
+  SMS
+}
+
+enum OtpPurpose {
+  VERIFY // confirm a new account
+  RESET  // reset a forgotten password
+}
+
+model Otp {
+  id      String     @id @default(uuid())
+  // The email address or phone number the code was sent to.
+  target  String
+  channel OtpChannel
+  purpose OtpPurpose
+  // bcrypt hash of the 6-digit code — never stored in clear.
+  codeHash   String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int       @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([target, purpose])
+}
+
+// ---------------------------------------------------------------------------
+// Catalog: movies, series, episodes
+// ---------------------------------------------------------------------------
+
+model Content {
+  id          String        @id @default(uuid())
+  title       String
+  slug        String        @unique
+  description String?
+  type        ContentType
+  status      ContentStatus @default(DRAFT)
+
+  releaseYear Int?
+  durationSec Int?
+  ageRating   String?
+  language    String?
+  country     String?
+
+  posterUrl   String?
+  backdropUrl String?
+  trailerUrl  String?
+
+  // Cast member names shown on the detail page.
+  cast String[]
+  // Shown in the landing/home hero carousel.
+  featured Boolean @default(false)
+
+  genres       ContentGenre[]
+  seasons      Season[]
+  videoAssets  VideoAsset[]
+  subtitles    Subtitle[]
+  watchHistory WatchHistory[]
+  watchlist    Watchlist[]
+  ratings      Rating[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([featured])
+  @@index([releaseYear])
+}
+
+model Genre {
+  id   String @id @default(uuid())
+  name String @unique
+  slug String @unique
+
+  contents ContentGenre[]
+}
+
+model ContentGenre {
+  contentId String
+  genreId   String
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  genre   Genre   @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([contentId, genreId])
+  @@index([genreId])
+}
+
+model Season {
+  id        String  @id @default(uuid())
+  contentId String
+  number    Int
+  title     String?
+
+  content  Content   @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  episodes Episode[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([contentId, number])
+}
+
+model Episode {
+  id          String  @id @default(uuid())
+  seasonId    String
+  number      Int
+  title       String
+  description String?
+  durationSec Int?
+
+  thumbnailUrl String?
+
+  season       Season         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  videoAssets  VideoAsset[]
+  subtitles    Subtitle[]
+  watchHistory WatchHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([seasonId, number])
+}
+
+// A playable file in R2 — either for a movie (contentId) or an episode.
+model VideoAsset {
+  id String @id @default(uuid())
+
+  contentId String?
+  episodeId String?
+
+  quality VideoQuality
+  url     String?
+  r2Key   String?
+
+  mimeType  String?
+  sizeBytes BigInt?
+
+  content Content? @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([contentId])
+  @@index([episodeId])
+}
+
+model Subtitle {
+  id String @id @default(uuid())
+
+  contentId String?
+  episodeId String?
+
+  language String
+  label    String?
+  url      String?
+  r2Key    String?
+
+  content Content? @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([contentId])
+  @@index([episodeId])
+}
+
+// ---------------------------------------------------------------------------
+// User activity
+// ---------------------------------------------------------------------------
+
+model WatchHistory {
+  id String @id @default(uuid())
+
+  userId    String
+  contentId String
+  episodeId String?
+
+  progressSec Int      @default(0)
+  completed   Boolean  @default(false)
+  watchedAt   DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contentId, episodeId])
+  @@index([userId, watchedAt])
+}
+
+model Watchlist {
+  id String @id @default(uuid())
+
+  userId    String
+  contentId String
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, contentId])
+}
+
+model Rating {
+  id String @id @default(uuid())
+
+  userId    String
+  contentId String
+  score     Int // 1–5, validated at the API layer
+  review    String?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, contentId])
+  @@index([contentId])
+}
+
+// ---------------------------------------------------------------------------
+// Billing: plans, subscriptions, payments
+// ---------------------------------------------------------------------------
+
+model Plan {
+  id          String        @id @default(uuid())
+  name        String
+  price       Int // MNT (₮)
+  durationDay Int
+  quality     VideoQuality?
+  maxDevices  Int           @default(1)
+  // Inactive plans stay attached to old subscriptions but can't be purchased.
+  active      Boolean       @default(true)
+
+  subscriptions Subscription[]
+  payments      Payment[]
+
+  createdAt DateTime @default(now())
+}
+
+model Subscription {
+  id String @id @default(uuid())
+
+  userId String
+  planId String
+
+  status    SubscriptionStatus @default(ACTIVE)
+  startedAt DateTime           @default(now())
+  endsAt    DateTime
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan     Plan      @relation(fields: [planId], references: [id])
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, endsAt])
+  @@index([status])
+}
+
+model Payment {
+  id String @id @default(uuid())
+
+  userId String
+  // The plan being purchased; the subscription is created when payment lands.
+  planId         String?
+  subscriptionId String?
+
+  amount Int // MNT (₮)
+  method PaymentMethod
+  status PaymentStatus @default(PENDING)
+
+  // Provider references: QPay invoice_id for polling, payment_id on success.
+  invoiceId     String?
+  transactionId String?
+  paidAt        DateTime?
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan         Plan?         @relation(fields: [planId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([status])
+  @@index([invoiceId])
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum ContentType {
+  MOVIE
+  SERIES
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum VideoQuality {
+  P480
+  P720
+  P1080
+  P4K
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  QPAY
+  CARD
+  BANK
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
