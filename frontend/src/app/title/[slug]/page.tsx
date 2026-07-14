@@ -1,28 +1,64 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { Navbar } from "@/components/Navbar";
+import { useParams } from "next/navigation";
+import { AppShell } from "@/components/layout/AppShell";
+import { ContentCard } from "@/components/ContentCard";
+import { ContentRow } from "@/components/ContentRow";
+import { PaymentModal } from "@/components/billing/PaymentModal";
+import { Badge } from "@/components/ui/Badge";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { EmptyState } from "@/components/ui/EmptyState";
+import {
+  IconCheck,
+  IconClock,
+  IconPlay,
+  IconPlus,
+  IconTicket,
+} from "@/components/ui/icons";
 import { useAuth } from "@/lib/auth-context";
-import { activityApi, contentApi } from "@/lib/api";
-import type { ContentDetail } from "@/lib/types";
-import { formatDuration } from "@/lib/format";
+import { activityApi, billingApi, contentApi } from "@/lib/api";
+import type {
+  Content,
+  ContentAccess,
+  ContentDetail,
+  HistoryItem,
+  RentCheckoutResult,
+} from "@/lib/types";
+import {
+  formatDuration,
+  formatHours,
+  formatMnt,
+  formatRemaining,
+  watchedPercent,
+} from "@/lib/format";
 
 export default function TitlePage() {
-  const router = useRouter();
+  return (
+    <AppShell>
+      <TitleContent />
+    </AppShell>
+  );
+}
+
+function TitleContent() {
   const { slug } = useParams<{ slug: string }>();
-  const { user, token, loading: authLoading } = useAuth();
+  const { user, token } = useAuth();
 
   const [content, setContent] = useState<ContentDetail | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [access, setAccess] = useState<ContentAccess | null>(null);
+  const [related, setRelated] = useState<Content[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [inList, setInList] = useState(false);
   const [trailerOpen, setTrailerOpen] = useState(false);
   const [myScore, setMyScore] = useState(0);
-
-  useEffect(() => {
-    if (!authLoading && !user) router.replace("/login");
-  }, [authLoading, user, router]);
+  const [renting, setRenting] = useState(false);
+  const [rentCheckout, setRentCheckout] = useState<RentCheckoutResult | null>(null);
+  const [rentError, setRentError] = useState("");
 
   useEffect(() => {
     if (!slug) return;
@@ -30,16 +66,36 @@ export default function TitlePage() {
       .get(slug)
       .then(setContent)
       .catch(() => setNotFound(true));
+    contentApi
+      .related(slug)
+      .then(setRelated)
+      .catch(() => setRelated([]));
   }, [slug]);
 
-  // Is this title already on the watchlist?
+  const contentId = content?.id ?? null;
   useEffect(() => {
-    if (!token || !content) return;
+    if (!token || !contentId) return;
+    contentApi
+      .access(contentId, token)
+      .then(setAccess)
+      .catch(() => setAccess(null));
+    activityApi
+      .history(token)
+      .then(setHistory)
+      .catch(() => setHistory([]));
     activityApi
       .watchlist(token)
-      .then((items) => setInList(items.some((i) => i.content.id === content.id)))
+      .then((items) => setInList(items.some((i) => i.content.id === contentId)))
       .catch(() => undefined);
-  }, [token, content]);
+  }, [token, contentId]);
+
+  const refreshAccess = useCallback(() => {
+    if (!token || !contentId) return;
+    contentApi
+      .access(contentId, token)
+      .then(setAccess)
+      .catch(() => undefined);
+  }, [token, contentId]);
 
   async function toggleList() {
     if (!token || !content) return;
@@ -60,31 +116,53 @@ export default function TitlePage() {
       .catch(() => setMyScore(0));
   }
 
-  if (authLoading || !user) return null;
+  async function startRent() {
+    if (!token || !content) return;
+    setRentError("");
+    setRenting(true);
+    try {
+      const res = await billingApi.rent(token, content.id);
+      setRentCheckout(res);
+    } catch (err) {
+      setRentError(err instanceof Error ? err.message : "Алдаа гарлаа.");
+    } finally {
+      setRenting(false);
+    }
+  }
+
+  const resume = useMemo(() => {
+    if (!content) return null;
+    return (
+      history.find(
+        (h) => h.content.id === content.id && !h.completed && h.progressSec > 30,
+      ) ?? null
+    );
+  }, [history, content]);
 
   if (notFound) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <div className="px-5 py-24 text-center">
-          <p className="text-white/60">Контент олдсонгүй.</p>
-          <Link
-            href="/home"
-            className="mt-3 inline-block text-sm font-semibold text-brand"
-          >
-            Нүүр хуудас руу буцах
-          </Link>
-        </div>
+      <div className="px-5 py-24 sm:px-10">
+        <EmptyState
+          title="Контент олдсонгүй"
+          description="Энэ холбоос хуучирсан эсвэл контент устгагдсан байж болно."
+          action={
+            <ButtonLink href="/home" variant="accent">
+              Нүүр хуудас руу буцах
+            </ButtonLink>
+          }
+        />
       </div>
     );
   }
 
   if (!content) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-brand" />
+      <div className="px-5 py-10 sm:px-10">
+        <Skeleton className="h-[46vh] w-full rounded-2xl" />
+        <Skeleton className="mt-6 h-8 w-72 max-w-full" />
+        <div className="mt-4 space-y-2">
+          <Skeleton className="h-3.5 w-full max-w-2xl" />
+          <Skeleton className="h-3.5 w-4/5 max-w-xl" />
         </div>
       </div>
     );
@@ -92,11 +170,20 @@ export default function TitlePage() {
 
   const isSeries = content.type === "SERIES";
   const firstEpisode = content.seasons[0]?.episodes[0];
+  const watchHref = resume?.episode
+    ? `/watch/${content.id}?episodeId=${resume.episode.id}`
+    : isSeries && firstEpisode
+      ? `/watch/${content.id}?episodeId=${firstEpisode.id}`
+      : `/watch/${content.id}`;
+
+  const canWatch = access?.canWatch ?? user?.role === "ADMIN";
+  const showRent = Boolean(
+    content.isRentable && access && !access.viaRental && !canWatch,
+  );
+  const showPlans = Boolean(content.subscriptionIncluded && access && !canWatch);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-
+    <div className="pb-16">
       {/* Backdrop hero */}
       <section className="relative isolate overflow-hidden">
         <div className="absolute inset-0 -z-10">
@@ -115,17 +202,18 @@ export default function TitlePage() {
               className="h-full w-full"
               style={{
                 background:
-                  "radial-gradient(120% 120% at 70% 10%, #2a1147 0%, #12102b 50%, #08080a 100%)",
+                  "radial-gradient(120% 120% at 70% 10%, #26335e 0%, #131b31 50%, #0a0e17 100%)",
               }}
             />
           )}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/70 to-black/30" />
+          <div className="absolute inset-0 bg-gradient-to-r from-background-deep/95 via-background-deep/70 to-background-deep/30" />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+          <div className="projector-light absolute inset-0" />
         </div>
 
         <div className="flex flex-col gap-8 px-5 pb-12 pt-10 sm:px-10 md:flex-row md:items-end">
           {/* Poster */}
-          <div className="w-40 shrink-0 overflow-hidden rounded-xl border border-white/10 shadow-2xl sm:w-52">
+          <div className="w-40 shrink-0 overflow-hidden rounded-xl border border-line-strong shadow-pop sm:w-52">
             {content.posterUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -138,7 +226,7 @@ export default function TitlePage() {
                 className="aspect-[2/3] w-full"
                 style={{
                   background:
-                    "linear-gradient(160deg, #2a1147 0%, #12102b 55%, #0a0a12 100%)",
+                    "linear-gradient(160deg, #1e2a4d 0%, #131b31 55%, #0a0e17 100%)",
                 }}
               />
             )}
@@ -146,25 +234,45 @@ export default function TitlePage() {
 
           {/* Meta */}
           <div className="max-w-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-white/50">
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-accent">
               {isSeries ? "Цуврал" : "Кино"}
             </p>
-            <h1 className="display mt-2 text-4xl font-bold text-white drop-shadow-lg sm:text-5xl">
+            <h1 className="display mt-2 text-4xl font-bold leading-none text-foreground drop-shadow-lg sm:text-5xl">
               {content.title}
             </h1>
+            {content.originalTitle ? (
+              <p className="mt-1.5 text-base font-medium text-foreground/55">
+                {content.originalTitle}
+              </p>
+            ) : null}
 
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-white/70">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-foreground/70">
               {content.releaseYear ? (
-                <span className="font-semibold text-white">{content.releaseYear}</span>
+                <span className="font-semibold text-foreground">
+                  {content.releaseYear}
+                </span>
               ) : null}
               {content.ageRating ? (
-                <span className="rounded border border-white/25 px-1.5 py-0.5 text-xs">
+                <span className="rounded border border-line-strong px-1.5 py-0.5 text-xs">
                   {content.ageRating}
                 </span>
               ) : null}
-              {content.durationSec ? (
+              {!isSeries && content.durationSec ? (
                 <span>{formatDuration(content.durationSec)}</span>
               ) : null}
+              {isSeries ? (
+                <span>
+                  {content.seasons.length} улирал •{" "}
+                  {content.seasons.reduce((n, s) => n + s.episodes.length, 0)} анги
+                </span>
+              ) : null}
+              <Badge
+                tone={content.releaseStatus === "RELEASING" ? "teal" : "default"}
+              >
+                {content.releaseStatus === "RELEASING"
+                  ? "Одоо гарч байгаа"
+                  : "Гарч дууссан"}
+              </Badge>
               {content.ratingCount > 0 ? (
                 <span className="font-semibold text-gold">
                   ★ {content.ratingAvg?.toFixed(1)} ({content.ratingCount})
@@ -176,63 +284,96 @@ export default function TitlePage() {
               {content.genres.map((g) => (
                 <Link
                   key={g.genre.id}
-                  href={`/home?genre=${g.genre.slug}`}
-                  className="rounded bg-white/10 px-2 py-0.5 text-xs font-medium text-white/80 transition hover:bg-white/20"
+                  href={`/browse?genre=${g.genre.slug}`}
+                  className="rounded-md bg-white/10 px-2 py-0.5 text-xs font-medium text-foreground/80 transition hover:bg-white/20"
                 >
                   {g.genre.name}
                 </Link>
               ))}
             </div>
 
-            <p className="mt-5 text-sm leading-relaxed text-white/80 sm:text-base">
+            <p className="mt-5 text-sm leading-relaxed text-foreground/80 sm:text-base">
               {content.description}
             </p>
 
+            {content.director ? (
+              <p className="mt-4 text-sm text-muted">
+                <span className="font-semibold text-foreground/80">
+                  Найруулагч:
+                </span>{" "}
+                {content.director}
+              </p>
+            ) : null}
             {content.cast.length > 0 ? (
-              <p className="mt-4 text-sm text-white/60">
-                <span className="font-semibold text-white/80">Гол дүрд:</span>{" "}
+              <p className="mt-1.5 text-sm text-muted">
+                <span className="font-semibold text-foreground/80">Гол дүрд:</span>{" "}
                 {content.cast.join(", ")}
               </p>
             ) : null}
 
+            {/* Rental state / errors */}
+            {access?.viaRental && access.rentalEndsAt ? (
+              <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/10 px-3.5 py-2.5 text-sm text-gold">
+                <IconClock size={17} />
+                Түрээс: {formatRemaining(access.rentalEndsAt)} үлдсэн
+              </div>
+            ) : null}
+            {rentError ? (
+              <div className="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-3.5 py-2.5 text-sm text-danger">
+                {rentError}
+              </div>
+            ) : null}
+
             {/* Actions */}
-            <div className="mt-7 flex flex-wrap items-center gap-3">
-              <Link
-                href={
-                  isSeries && firstEpisode
-                    ? `/watch/${content.id}?episodeId=${firstEpisode.id}`
-                    : `/watch/${content.id}`
-                }
-                className="rounded-md bg-brand px-7 py-3 text-base font-bold text-white shadow-xl shadow-brand/30 transition hover:bg-brand-hover"
-              >
-                ▶ Үзэх
-              </Link>
+            <div className="mt-7 flex flex-wrap items-center gap-2.5">
+              {canWatch ? (
+                <ButtonLink href={watchHref} variant="primary" size="lg">
+                  <IconPlay size={18} />
+                  {resume ? "Үргэлжлүүлэх" : "Үзэх"}
+                </ButtonLink>
+              ) : null}
+              {showRent && content.rentalPrice ? (
+                <Button
+                  variant="accent"
+                  size="lg"
+                  loading={renting}
+                  onClick={startRent}
+                  className="bg-gold text-background-deep shadow-[0_4px_20px_rgba(230,185,94,0.25)] hover:bg-gold/90"
+                >
+                  <IconTicket size={18} />
+                  Түрээслэх — {formatMnt(content.rentalPrice)} /{" "}
+                  {formatHours(content.rentalDurationHours)}
+                </Button>
+              ) : null}
+              {showPlans ? (
+                <ButtonLink href="/plans" variant="accent" size="lg">
+                  Багц идэвхжүүлэх
+                </ButtonLink>
+              ) : null}
               {content.trailerUrl ? (
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="lg"
                   onClick={() => setTrailerOpen(true)}
-                  className="rounded-md border border-white/25 bg-white/10 px-6 py-3 text-base font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"
                 >
                   Трейлер
-                </button>
+                </Button>
               ) : null}
-              <button
-                type="button"
+              <Button
+                variant="outline"
+                size="lg"
                 onClick={toggleList}
                 aria-pressed={inList}
-                className={`rounded-md border px-5 py-3 text-base font-semibold transition ${
-                  inList
-                    ? "border-brand/60 bg-brand/15 text-white"
-                    : "border-white/25 bg-white/5 text-white hover:bg-white/15"
-                }`}
+                className={inList ? "border-accent/50 bg-accent/10" : ""}
               >
-                {inList ? "✓ Жагсаалтад байгаа" : "+ Жагсаалт"}
-              </button>
+                {inList ? <IconCheck size={18} /> : <IconPlus size={18} />}
+                {inList ? "Жагсаалтад байгаа" : "Жагсаалт"}
+              </Button>
             </div>
 
             {/* Rating */}
             <div className="mt-5 flex items-center gap-1.5">
-              <span className="mr-1 text-sm text-white/60">Үнэлэх:</span>
+              <span className="mr-1 text-sm text-muted">Үнэлэх:</span>
               {[1, 2, 3, 4, 5].map((n) => (
                 <button
                   key={n}
@@ -240,7 +381,9 @@ export default function TitlePage() {
                   onClick={() => rate(n)}
                   aria-label={`${n} од`}
                   className={`text-xl transition hover:scale-110 ${
-                    n <= myScore ? "text-gold" : "text-white/25 hover:text-white/60"
+                    n <= myScore
+                      ? "text-gold"
+                      : "text-foreground/25 hover:text-foreground/60"
                   }`}
                 >
                   ★
@@ -254,84 +397,129 @@ export default function TitlePage() {
       {/* Episodes (series) */}
       {isSeries && content.seasons.length > 0 ? (
         <section className="px-5 py-10 sm:px-10">
-          <h2 className="display text-xl font-semibold text-white">Ангиуд</h2>
+          <h2 className="display text-xl font-semibold text-foreground">Ангиуд</h2>
           {content.seasons.map((season) => (
             <div key={season.id} className="mt-6">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-white/60">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-muted">
                 {season.title ?? `Улирал ${season.number}`}
               </h3>
               <div className="mt-3 space-y-2">
-                {season.episodes.map((ep) => (
-                  <Link
-                    key={ep.id}
-                    href={`/watch/${content.id}?episodeId=${ep.id}`}
-                    className="flex items-center gap-4 rounded-lg border border-line bg-surface px-4 py-3 transition hover:bg-surface-raised"
-                  >
-                    <span className="w-8 shrink-0 text-center text-lg font-bold text-white/40">
-                      {ep.number}
-                    </span>
-                    <div className="h-14 w-24 shrink-0 overflow-hidden rounded bg-white/5">
-                      {ep.thumbnailUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={ep.thumbnailUrl}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                      ) : null}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-white">
-                        {ep.title}
-                      </p>
-                      {ep.description ? (
-                        <p className="mt-0.5 line-clamp-1 text-xs text-white/50">
-                          {ep.description}
-                        </p>
-                      ) : null}
-                    </div>
-                    {ep.durationSec ? (
-                      <span className="shrink-0 text-xs text-white/50">
-                        {formatDuration(ep.durationSec)}
+                {season.episodes.map((ep) => {
+                  const row = history.find((h) => h.episode?.id === ep.id);
+                  const percent = row
+                    ? watchedPercent(row.progressSec, ep.durationSec)
+                    : null;
+                  return (
+                    <Link
+                      key={ep.id}
+                      href={`/watch/${content.id}?episodeId=${ep.id}`}
+                      className="flex items-center gap-4 rounded-xl border border-line bg-surface px-4 py-3 transition hover:bg-surface-raised"
+                    >
+                      <span className="w-8 shrink-0 text-center text-lg font-bold text-muted/60">
+                        {ep.number}
                       </span>
-                    ) : null}
-                  </Link>
-                ))}
+                      <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded-md bg-white/[.05]">
+                        {ep.thumbnailUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={ep.thumbnailUrl}
+                            alt=""
+                            loading="lazy"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : null}
+                        {percent ? (
+                          <div className="absolute inset-x-0 bottom-0 h-1 bg-background-deep/70">
+                            <div
+                              className="h-full bg-accent"
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {ep.title}
+                        </p>
+                        {ep.description ? (
+                          <p className="mt-0.5 line-clamp-1 text-xs text-muted">
+                            {ep.description}
+                          </p>
+                        ) : null}
+                      </div>
+                      {ep.durationSec ? (
+                        <span className="shrink-0 text-xs text-muted">
+                          {formatDuration(ep.durationSec)}
+                        </span>
+                      ) : null}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           ))}
         </section>
       ) : null}
 
-      {/* Trailer modal */}
-      {trailerOpen && content.trailerUrl ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
-          role="dialog"
-          aria-label="Трейлер"
-          onClick={() => setTrailerOpen(false)}
+      {/* Related */}
+      {related.length > 0 ? (
+        <ContentRow title="Төстэй контент">
+          {related.map((item) => (
+            <ContentCard key={item.id} content={item} />
+          ))}
+        </ContentRow>
+      ) : null}
+
+      {/* Trailer dialog */}
+      {content.trailerUrl ? (
+        <Modal
+          open={trailerOpen}
+          onClose={() => setTrailerOpen(false)}
+          label={`${content.title} — трейлер`}
+          size="xl"
+          className="overflow-hidden p-0"
         >
-          <div
-            className="w-full max-w-4xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-end pb-2">
-              <button
-                type="button"
-                onClick={() => setTrailerOpen(false)}
-                className="rounded px-3 py-1 text-sm font-semibold text-white/80 hover:bg-white/10 hover:text-white"
-              >
-                Хаах ✕
-              </button>
-            </div>
+          {trailerOpen ? (
             <video
               src={content.trailerUrl}
               controls
               autoPlay
-              className="aspect-video w-full rounded-lg bg-black"
+              className="aspect-video w-full bg-black"
             />
-          </div>
-        </div>
+          ) : null}
+        </Modal>
+      ) : null}
+
+      {/* Rental payment */}
+      {rentCheckout ? (
+        <PaymentModal
+          open
+          onClose={() => setRentCheckout(null)}
+          title="Түрээсийн төлбөр"
+          subtitle={content.title}
+          amount={rentCheckout.amount}
+          paymentId={rentCheckout.paymentId}
+          invoice={rentCheckout.invoice}
+          onPaid={refreshAccess}
+          successContent={
+            <div>
+              <p className="text-sm text-muted">
+                {content.title} —{" "}
+                {formatHours(rentCheckout.content.rentalDurationHours)} үзэх эрх
+                нээгдлээ.
+              </p>
+              <ButtonLink
+                href={watchHref}
+                variant="primary"
+                size="lg"
+                className="mt-5 w-full"
+              >
+                <IconPlay size={18} />
+                Үзэж эхлэх
+              </ButtonLink>
+            </div>
+          }
+        />
       ) : null}
     </div>
   );

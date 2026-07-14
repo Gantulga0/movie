@@ -11,13 +11,19 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { ContentStatus, ContentType } from '@prisma/client';
+import { ContentStatus, ContentType, ReleaseStatus } from '@prisma/client';
 
 export class CreateContentDto {
   @IsString()
   @MinLength(1)
   @MaxLength(200)
   title!: string;
+
+  /** Original (foreign) title shown next to the localized one. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  originalTitle?: string;
 
   @IsOptional()
   @IsString()
@@ -29,6 +35,10 @@ export class CreateContentDto {
   @IsOptional()
   @IsEnum(ContentStatus)
   status?: ContentStatus;
+
+  @IsOptional()
+  @IsEnum(ReleaseStatus)
+  releaseStatus?: ReleaseStatus;
 
   @IsOptional()
   @IsInt()
@@ -55,6 +65,34 @@ export class CreateContentDto {
   @IsString()
   @MaxLength(60)
   country?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  director?: string;
+
+  // ---- Rental settings (admin-managed; backend is the source of truth) ----
+
+  @IsOptional()
+  @IsBoolean()
+  isRentable?: boolean;
+
+  /** One-time rental price in MNT. */
+  @IsOptional()
+  @IsInt()
+  @Min(100)
+  @Max(10_000_000)
+  rentalPrice?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(720)
+  rentalDurationHours?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  subscriptionIncluded?: boolean;
 
   @IsOptional()
   @IsString()

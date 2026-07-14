@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, adminApi } from "@/lib/api";
+import { useToast } from "@/components/ui/Toast";
 import type { ContentDetail } from "@/lib/types";
 import {
   ContentForm,
@@ -20,11 +21,11 @@ import {
 export default function EditContentPage() {
   const { id } = useParams<{ id: string }>();
   const { token } = useAuth();
+  const toast = useToast();
 
   const [content, setContent] = useState<ContentDetail | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
 
   const load = useCallback(() => {
     if (!token || !id) return;
@@ -36,14 +37,14 @@ export default function EditContentPage() {
   async function save(values: ContentFormValues) {
     if (!token || !content) return;
     setError("");
-    setSaved(false);
     setSubmitting(true);
     try {
       await adminApi.contentUpdate(token, content.id, toPayload(values));
-      setSaved(true);
+      toast.success("Хадгалагдлаа.");
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Хадгалахад алдаа гарлаа.");
+      toast.error("Хадгалахад алдаа гарлаа.");
     } finally {
       setSubmitting(false);
     }
@@ -59,14 +60,9 @@ export default function EditContentPage() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="display text-2xl font-semibold text-white">
-          {content.title}
-        </h1>
-        {saved ? (
-          <span className="text-sm font-semibold text-green-400">Хадгалагдлаа ✓</span>
-        ) : null}
-      </div>
+      <h1 className="display text-2xl font-semibold text-white">
+        {content.title}
+      </h1>
 
       <div className="mt-6 grid gap-10 xl:grid-cols-[1fr_420px]">
         {/* Media/video first on smaller screens so uploads are easy to reach */}

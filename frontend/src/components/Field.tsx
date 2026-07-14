@@ -28,9 +28,9 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
           id={fieldId}
           ref={ref}
           type={isPassword && revealed ? "text" : type}
-          className={`w-full rounded-lg border bg-white/5 px-4 py-3 text-white placeholder-white/35 outline-none transition focus:border-brand focus:bg-white/10 ${
+          className={`no-focus-ring w-full rounded-xl border bg-white/5 px-4 py-3 text-white placeholder-white/35 outline-none transition focus:border-accent/40 focus:bg-white/10 ${
             isPassword ? "pr-12" : ""
-          } ${error ? "border-brand/70" : "border-white/15"} ${className}`}
+          } ${error ? "border-brand/70" : "border-line"} ${className}`}
           aria-invalid={error ? true : undefined}
           {...props}
         />

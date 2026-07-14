@@ -70,4 +70,13 @@ export class UsersService {
   updatePassword(id: string, passwordHash: string): Promise<User> {
     return this.prisma.user.update({ where: { id }, data: { passwordHash } });
   }
+
+  /** Self-service profile edits (display name, avatar). */
+  async updateProfile(
+    id: string,
+    data: { name?: string; avatarUrl?: string },
+  ): Promise<SafeUser> {
+    const user = await this.prisma.user.update({ where: { id }, data });
+    return UsersService.sanitize(user);
+  }
 }

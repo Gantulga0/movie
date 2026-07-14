@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ContentService } from './content.service';
 import { ContentController } from './content.controller';
-import { SubscriptionGuard } from '../billing/guards/subscription.guard';
+import { EntitlementGuard } from '../billing/guards/entitlement.guard';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
+  imports: [StorageModule],
   controllers: [ContentController],
-  providers: [ContentService, SubscriptionGuard],
+  providers: [ContentService, EntitlementGuard],
   exports: [ContentService],
 })
 export class ContentModule {}

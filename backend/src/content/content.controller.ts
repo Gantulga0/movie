@@ -19,7 +19,9 @@ import { CreateSubtitleDto, CreateVideoAssetDto } from './dto/video-asset.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { SubscriptionGuard } from '../billing/guards/subscription.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { EntitlementGuard } from '../billing/guards/entitlement.guard';
+import { SafeUser } from '../users/users.service';
 
 @Controller('content')
 export class ContentController {
@@ -53,11 +55,24 @@ export class ContentController {
     return this.content.get(idOrSlug, true);
   }
 
-  // Streaming sources — needs a live subscription (admins bypass).
+  // Streaming sources — needs a live subscription or rental (admins bypass).
   @Get(':id/watch')
-  @UseGuards(JwtAuthGuard, SubscriptionGuard)
+  @UseGuards(JwtAuthGuard, EntitlementGuard)
   watch(@Param('id') id: string, @Query('episodeId') episodeId?: string) {
     return this.content.watch(id, episodeId || undefined);
+  }
+
+  /** The caller's access state for one title (watch/rent button logic). */
+  @Get(':id/access')
+  @UseGuards(JwtAuthGuard)
+  access(@Param('id') id: string, @CurrentUser() user: SafeUser) {
+    return this.content.access(id, user);
+  }
+
+  /** Published titles sharing a genre — the "related" rail. */
+  @Get(':idOrSlug/related')
+  related(@Param('idOrSlug') idOrSlug: string) {
+    return this.content.related(idOrSlug);
   }
 
   @Get(':idOrSlug')

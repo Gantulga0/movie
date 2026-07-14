@@ -88,7 +88,7 @@ export default function ForgotPasswordPage() {
       }
     >
       {error ? (
-        <div className="mb-4 rounded-lg border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-red-200">
+        <div className="mb-4 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
           {error}
         </div>
       ) : null}

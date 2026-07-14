@@ -3,25 +3,48 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ContentStatus, Prisma } from '@prisma/client';
+import {
+  ContentStatus,
+  Prisma,
+  Role,
+  SubscriptionStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
+import { SafeUser } from '../users/users.service';
 import { slugify, slugWithSuffix } from '../common/ids';
 import { CreateContentDto } from './dto/create-content.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
-import { QueryContentDto } from './dto/query-content.dto';
+import { ContentSort, QueryContentDto } from './dto/query-content.dto';
 import { CreateEpisodeDto, CreateSeasonDto } from './dto/season-episode.dto';
 import { CreateSubtitleDto, CreateVideoAssetDto } from './dto/video-asset.dto';
 
 const DEFAULT_PAGE_SIZE = 24;
+const RELATED_LIMIT = 12;
 
 /** Card-level include used by list views. */
 const listInclude = {
   genres: { include: { genre: true } },
 } satisfies Prisma.ContentInclude;
 
+/** List orderings. 'watched'/'rated' rank by activity volume (row counts). */
+const SORT_ORDERINGS: Record<
+  ContentSort,
+  Prisma.ContentOrderByWithRelationInput[]
+> = {
+  new: [{ createdAt: 'desc' }],
+  year: [{ releaseYear: 'desc' }, { createdAt: 'desc' }],
+  title: [{ title: 'asc' }],
+  watched: [{ watchHistory: { _count: 'desc' } }, { createdAt: 'desc' }],
+  rated: [{ ratings: { _count: 'desc' } }, { createdAt: 'desc' }],
+};
+
 @Injectable()
 export class ContentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   // ---------------------------------------------------------------- public
 
@@ -37,11 +60,24 @@ export class ContentService {
 
     if (query.type) where.type = query.type;
     if (query.featured !== undefined) where.featured = query.featured;
+    if (query.releaseStatus) where.releaseStatus = query.releaseStatus;
     if (query.genre) {
       where.genres = { some: { genre: { slug: query.genre } } };
     }
     if (query.search) {
-      where.title = { contains: query.search, mode: 'insensitive' };
+      // Match either the localized or the original title.
+      where.OR = [
+        { title: { contains: query.search, mode: 'insensitive' } },
+        { originalTitle: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+    if (query.year) {
+      where.releaseYear = query.year;
+    } else if (query.yearFrom !== undefined || query.yearTo !== undefined) {
+      where.releaseYear = {
+        ...(query.yearFrom !== undefined ? { gte: query.yearFrom } : {}),
+        ...(query.yearTo !== undefined ? { lte: query.yearTo } : {}),
+      };
     }
 
     const page = query.page ?? 1;
@@ -51,7 +87,7 @@ export class ContentService {
       this.prisma.content.findMany({
         where,
         include: listInclude,
-        orderBy: { createdAt: 'desc' },
+        orderBy: SORT_ORDERINGS[query.sort ?? 'new'],
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -59,6 +95,85 @@ export class ContentService {
     ]);
 
     return { items, total, page, limit };
+  }
+
+  /** Published titles sharing at least one genre; newest first. */
+  async related(idOrSlug: string) {
+    const content = await this.prisma.content.findFirst({
+      where: {
+        OR: [{ id: idOrSlug }, { slug: idOrSlug }],
+        status: ContentStatus.PUBLISHED,
+      },
+      include: { genres: true },
+    });
+    if (!content) throw new NotFoundException('Контент олдсонгүй');
+
+    const genreIds = content.genres.map((g) => g.genreId);
+    return this.prisma.content.findMany({
+      where: {
+        id: { not: content.id },
+        status: ContentStatus.PUBLISHED,
+        ...(genreIds.length
+          ? { genres: { some: { genreId: { in: genreIds } } } }
+          : {}),
+      },
+      include: listInclude,
+      orderBy: { createdAt: 'desc' },
+      take: RELATED_LIMIT,
+    });
+  }
+
+  /**
+   * The caller's access state for one title — what the Watch/Rent buttons
+   * should offer. Always computed server-side; the client never decides.
+   */
+  async access(contentId: string, user: SafeUser) {
+    const content = await this.prisma.content.findFirst({
+      where: { id: contentId, status: ContentStatus.PUBLISHED },
+      select: {
+        id: true,
+        subscriptionIncluded: true,
+        isRentable: true,
+        rentalPrice: true,
+        rentalDurationHours: true,
+      },
+    });
+    if (!content) throw new NotFoundException('Контент олдсонгүй');
+
+    const now = new Date();
+    const [subscription, rental] = await this.prisma.$transaction([
+      this.prisma.subscription.findFirst({
+        where: {
+          userId: user.id,
+          status: SubscriptionStatus.ACTIVE,
+          endsAt: { gt: now },
+        },
+        orderBy: { endsAt: 'desc' },
+        select: { endsAt: true },
+      }),
+      this.prisma.rental.findFirst({
+        where: { userId: user.id, contentId, endsAt: { gt: now } },
+        orderBy: { endsAt: 'desc' },
+        select: { endsAt: true },
+      }),
+    ]);
+
+    const viaSubscription = Boolean(
+      content.subscriptionIncluded && subscription,
+    );
+    const viaRental = Boolean(rental);
+
+    return {
+      contentId: content.id,
+      canWatch: user.role === Role.ADMIN || viaSubscription || viaRental,
+      viaSubscription,
+      viaRental,
+      rentalEndsAt: rental?.endsAt ?? null,
+      subscriptionIncluded: content.subscriptionIncluded,
+      isRentable: content.isRentable,
+      rentalPrice: content.isRentable ? content.rentalPrice : null,
+      rentalDurationHours: content.rentalDurationHours,
+    };
   }
 
   /** Detail view. Video asset URLs are withheld — those come from `watch`. */
@@ -103,7 +218,7 @@ export class ContentService {
     };
   }
 
-  /** Playable stream sources. Callers must pass the SubscriptionGuard. */
+  /** Playable stream sources. Callers must pass the EntitlementGuard. */
   async watch(contentId: string, episodeId?: string) {
     const content = await this.prisma.content.findFirst({
       where: { id: contentId, status: ContentStatus.PUBLISHED },
@@ -121,15 +236,48 @@ export class ContentService {
       this.prisma.subtitle.findMany({ where: assetWhere }),
     ]);
 
+    // R2 assets stream through short-lived signed URLs instead of permanent
+    // public links; local-mode files keep their /uploads path. R2 keys never
+    // leave the API.
+    const signedAssets = await Promise.all(
+      videoAssets.map(async (a) => ({
+        id: a.id,
+        quality: a.quality,
+        mimeType: a.mimeType,
+        sizeBytes: a.sizeBytes === null ? null : Number(a.sizeBytes),
+        url: await this.resolvePlaybackUrl(a.r2Key, a.url),
+      })),
+    );
+    const signedSubtitles = await Promise.all(
+      subtitles.map(async (s) => ({
+        id: s.id,
+        language: s.language,
+        label: s.label,
+        url: await this.resolvePlaybackUrl(s.r2Key, s.url),
+      })),
+    );
+
     return {
       contentId,
       episodeId: episodeId ?? null,
-      videoAssets: videoAssets.map((a) => ({
-        ...a,
-        sizeBytes: a.sizeBytes === null ? null : Number(a.sizeBytes),
-      })),
-      subtitles,
+      videoAssets: signedAssets,
+      subtitles: signedSubtitles,
     };
+  }
+
+  /** Signed R2 GET URL when possible, otherwise the stored URL. */
+  private async resolvePlaybackUrl(
+    r2Key: string | null,
+    url: string | null,
+  ): Promise<string | null> {
+    if (r2Key && this.storage.r2Configured) {
+      try {
+        return await this.storage.presignGetUrl(r2Key);
+      } catch {
+        return url;
+      }
+    }
+    return url;
   }
 
   listGenres() {
@@ -139,6 +287,9 @@ export class ContentService {
   // ----------------------------------------------------------------- admin
 
   async create(dto: CreateContentDto) {
+    if (dto.isRentable && !dto.rentalPrice) {
+      throw new BadRequestException('Түрээслэх бол түрээсийн үнэ шаардлагатай');
+    }
     const { genres, ...data } = dto;
     try {
       return await this.prisma.content.create({
@@ -169,7 +320,12 @@ export class ContentService {
   }
 
   async update(id: string, dto: UpdateContentDto) {
-    await this.requireContent(id);
+    const existing = await this.requireContent(id);
+    const willBeRentable = dto.isRentable ?? existing.isRentable;
+    const effectivePrice = dto.rentalPrice ?? existing.rentalPrice;
+    if (willBeRentable && !effectivePrice) {
+      throw new BadRequestException('Түрээслэх бол түрээсийн үнэ шаардлагатай');
+    }
     const { genres, ...data } = dto;
 
     if (genres !== undefined) {

@@ -25,3 +25,41 @@ export function daysLeft(iso: string): number {
   const ms = new Date(iso).getTime() - Date.now();
   return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
 }
+
+/** 1938 -> "32:18" , 7425 -> "2:03:45" — player-style position stamp. */
+export function formatTimestamp(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/** Remaining ISO time as "3 хоног 4 цаг" / "5 цаг" / "42 минут". */
+export function formatRemaining(iso: string): string {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "Дууссан";
+  const totalMinutes = Math.floor(ms / 60_000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return hours > 0 ? `${days} хоног ${hours} цаг` : `${days} хоног`;
+  if (hours > 0) return minutes > 0 ? `${hours} цаг ${minutes} мин` : `${hours} цаг`;
+  return `${minutes} минут`;
+}
+
+/** 48 -> "48 цаг", 72 -> "3 хоног" — rental duration label. */
+export function formatHours(hours: number): string {
+  if (hours % 24 === 0 && hours >= 24) return `${hours / 24} хоног`;
+  return `${hours} цаг`;
+}
+
+/** Watched share of a title, clamped to [0, 100]. */
+export function watchedPercent(
+  progressSec: number,
+  durationSec: number | null | undefined,
+): number | null {
+  if (!durationSec || durationSec <= 0) return null;
+  return Math.min(100, Math.max(0, Math.round((progressSec / durationSec) * 100)));
+}

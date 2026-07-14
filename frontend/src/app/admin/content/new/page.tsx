@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, adminApi } from "@/lib/api";
+import { useToast } from "@/components/ui/Toast";
 import type { ContentDetail } from "@/lib/types";
 import {
   ContentForm,
@@ -23,6 +24,7 @@ import {
  */
 export default function NewContentPage() {
   const { token } = useAuth();
+  const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<ContentDetail | null>(null);
@@ -43,8 +45,10 @@ export default function NewContentPage() {
       const content = await adminApi.contentCreate(token, toPayload(values));
       const detail = await adminApi.contentGet(token, content.id);
       setCreated(detail);
+      toast.success("Контент үүслээ.");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Хадгалахад алдаа гарлаа.");
+      toast.error("Хадгалахад алдаа гарлаа.");
     } finally {
       setSubmitting(false);
     }

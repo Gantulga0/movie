@@ -9,3 +9,9 @@ export class CheckoutDto {
   @IsEnum(PaymentMethod)
   method?: PaymentMethod;
 }
+
+/** Rental purchase — only the target title; price is server-resolved. */
+export class RentDto {
+  @IsString()
+  contentId!: string;
+}

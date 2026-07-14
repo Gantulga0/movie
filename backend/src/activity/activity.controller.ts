@@ -47,6 +47,14 @@ export class ActivityController {
     return this.activity.upsertHistory(user.id, dto);
   }
 
+  @Delete('history/:contentId')
+  removeHistory(
+    @CurrentUser() user: SafeUser,
+    @Param('contentId') contentId: string,
+  ) {
+    return this.activity.removeHistory(user.id, contentId);
+  }
+
   @Put('ratings')
   upsertRating(@CurrentUser() user: SafeUser, @Body() dto: UpsertRatingDto) {
     return this.activity.upsertRating(user.id, dto);

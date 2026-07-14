@@ -1,32 +1,67 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Infinite design tokens — a dark cinema hall lit by a projector beam.
+   Deep midnight-navy stage, warm off-white text, electric-indigo accent.
+--------------------------------------------------------------------------- */
+
 :root {
-  --background: #08080a;
-  --foreground: #f5f5f7;
-  --surface: #14141b;
-  --surface-raised: #1c1c25;
-  --line: rgba(255, 255, 255, 0.08);
-  --brand: #e50914;
-  --brand-hover: #f6121d;
-  --gold: #f5c518;
+  /* Stage */
+  --bg: #0a0e17;
+  --bg-deep: #05080f;
+  --surface: #101624;
+  --surface-raised: #182134;
+  --surface-overlay: #1e2a41;
+
+  /* Lines */
+  --line: rgba(151, 168, 214, 0.13);
+  --line-strong: rgba(151, 168, 214, 0.28);
+
+  /* Ink */
+  --text: #f2efe8;
+  --text-dim: #98a1bb;
+
+  /* Light */
+  --accent: #7c8cff;
+  --accent-hover: #95a2ff;
+  --accent-strong: #5d6ef5;
+  --teal: #56cfc9;
+  --gold: #e6b95e;
+  --danger: #f08484;
+  --success: #57d99a;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg);
+  --color-background-deep: var(--bg-deep);
+  --color-foreground: var(--text);
   --color-surface: var(--surface);
   --color-surface-raised: var(--surface-raised);
+  --color-surface-overlay: var(--surface-overlay);
   --color-line: var(--line);
-  --color-brand: var(--brand);
-  --color-brand-hover: var(--brand-hover);
+  --color-line-strong: var(--line-strong);
+  --color-muted: var(--text-dim);
+  /* Legacy token names kept so existing (admin) screens restyle for free. */
+  --color-brand: var(--accent);
+  --color-brand-hover: var(--accent-hover);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-teal: var(--teal);
   --color-gold: var(--gold);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+
   --font-sans: var(--font-inter);
-  --font-display: var(--font-oswald);
+  --font-display: var(--font-display-face);
+
+  /* Cool-tinted layered shadows; glow reserved for primary actions. */
+  --shadow-card: 0 2px 6px rgba(3, 6, 18, 0.35), 0 12px 32px rgba(3, 6, 18, 0.45);
+  --shadow-pop: 0 8px 20px rgba(3, 6, 18, 0.5), 0 24px 64px rgba(3, 6, 18, 0.6);
+  --shadow-glow: 0 0 0 1px rgba(124, 140, 255, 0.25), 0 4px 24px rgba(93, 110, 245, 0.35);
 }
 
 html {
-  /* Native form controls (select dropdowns, date pickers, scrollbars)
-     render in dark mode instead of the OS-default white. */
+  /* Native form controls render dark instead of the OS-default white. */
   color-scheme: dark;
 }
 
@@ -37,24 +72,82 @@ body {
 
 select option {
   background-color: var(--surface-raised);
-  color: var(--foreground);
+  color: var(--text);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Display headings: cinematic condensed uppercase */
+/* Very subtle film grain over the whole stage. Purely decorative. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Display headings: tall condensed uppercase, like a movie poster. */
 .display {
   font-family: var(--font-display), var(--font-sans), sans-serif;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.015em;
 }
 
-/* Full-screen carousel cross-fade */
+/* Toast alerts slide up as they arrive. */
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.toast-enter {
+  animation: toast-enter 0.18s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-enter {
+    animation: none;
+  }
+}
+
+/* Visible keyboard focus everywhere; mouse clicks stay quiet.
+   Text inputs match :focus-visible even on mouse click, so fields that
+   carry their own focus style opt out with .no-focus-ring. */
+:focus-visible:not(.no-focus-ring) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Thin dark scrollbars that don't glare on the dark stage. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(151, 168, 214, 0.25) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(151, 168, 214, 0.25);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ------------------------------------------------------------------ motion */
+
 @keyframes mnflix-fade {
   from {
     opacity: 0;
@@ -73,14 +166,6 @@ body {
   }
 }
 
-.animate-fade {
-  animation: mnflix-fade 0.9s ease forwards;
-}
-
-.animate-kenburns {
-  animation: mnflix-kenburns 8s ease-out forwards;
-}
-
 @keyframes mnflix-rise {
   from {
     opacity: 0;
@@ -92,11 +177,126 @@ body {
   }
 }
 
-.animate-rise {
-  animation: mnflix-rise 0.7s ease forwards;
+@keyframes mnflix-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
-/* Ticket-stub plan card: perforated edge between stub and body */
+@keyframes mnflix-slide-left {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes mnflix-slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Dropdown panels unfold from their trigger. */
+@keyframes mnflix-dropdown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes mnflix-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Slow drift for the auth-page 3D frames. */
+@keyframes mnflix-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  }
+  50% {
+    transform: translate3d(0, -14px, 0) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  }
+}
+
+.animate-fade {
+  animation: mnflix-fade 0.7s ease forwards;
+}
+
+.animate-kenburns {
+  animation: mnflix-kenburns 9s ease-out forwards;
+}
+
+.animate-rise {
+  animation: mnflix-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-scale-in {
+  animation: mnflix-scale-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-slide-left {
+  animation: mnflix-slide-left 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-slide-right {
+  animation: mnflix-slide-right 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-dropdown {
+  transform-origin: top;
+  animation: mnflix-dropdown 0.16s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-drift {
+  animation: mnflix-drift 9s ease-in-out infinite;
+}
+
+/* Skeleton shimmer — a faint beam sweeping across placeholder blocks. */
+.skeleton {
+  background: linear-gradient(
+    100deg,
+    rgba(151, 168, 214, 0.07) 40%,
+    rgba(151, 168, 214, 0.16) 50%,
+    rgba(151, 168, 214, 0.07) 60%
+  );
+  background-size: 200% 100%;
+  animation: mnflix-shimmer 1.6s linear infinite;
+}
+
+/* ------------------------------------------------------- signature effects */
+
+/* Projector beam: a soft cone of light falling from the top of the frame. */
+.projector-light {
+  background:
+    radial-gradient(58% 46% at 50% -6%, rgba(124, 140, 255, 0.22) 0%, transparent 70%),
+    radial-gradient(42% 34% at 50% -4%, rgba(230, 233, 255, 0.14) 0%, transparent 65%);
+}
+
+/* Ticket-stub card: perforated edge between stub and body. */
 .ticket-notch {
   --notch: 11px;
   -webkit-mask:
@@ -114,7 +314,7 @@ body {
 .ticket-perforation {
   background-image: linear-gradient(
     to right,
-    rgba(255, 255, 255, 0.25) 40%,
+    rgba(242, 239, 232, 0.25) 40%,
     transparent 40%
   );
   background-size: 10px 1px;
@@ -122,7 +322,7 @@ body {
   background-position: center;
 }
 
-/* Hide scrollbars on horizontal rows while keeping them scrollable */
+/* Hide scrollbars on horizontal rows while keeping them scrollable. */
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -134,7 +334,13 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .animate-fade,
   .animate-kenburns,
-  .animate-rise {
+  .animate-rise,
+  .animate-scale-in,
+  .animate-slide-left,
+  .animate-slide-right,
+  .animate-dropdown,
+  .animate-drift,
+  .skeleton {
     animation: none;
   }
   * {

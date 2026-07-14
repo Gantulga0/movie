@@ -5,7 +5,9 @@ import type {
   AuthResult,
   CheckoutResult,
   Content,
+  ContentAccess,
   ContentDetail,
+  ContentSort,
   Genre,
   HistoryItem,
   MySubscription,
@@ -16,6 +18,9 @@ import type {
   PendingVerification,
   Plan,
   PresignResult,
+  ReleaseStatus,
+  Rental,
+  RentCheckoutResult,
   User,
   WatchSources,
   WatchlistItem,
@@ -132,19 +137,33 @@ export const authApi = {
     apiFetch<{ success: boolean }>("/auth/logout", { method: "POST", token }),
 };
 
+export interface ContentListParams {
+  type?: "MOVIE" | "SERIES";
+  genre?: string;
+  search?: string;
+  featured?: boolean;
+  year?: number;
+  yearFrom?: number;
+  yearTo?: number;
+  releaseStatus?: ReleaseStatus;
+  sort?: ContentSort;
+  page?: number;
+  limit?: number;
+}
+
 export const contentApi = {
-  list: (params: {
-    type?: "MOVIE" | "SERIES";
-    genre?: string;
-    search?: string;
-    featured?: boolean;
-    page?: number;
-    limit?: number;
-  } = {}) => apiFetch<Paged<Content>>(`/content${qs(params)}`),
+  list: (params: ContentListParams = {}) =>
+    apiFetch<Paged<Content>>(`/content${qs({ ...params })}`),
 
   get: (idOrSlug: string) => apiFetch<ContentDetail>(`/content/${idOrSlug}`),
 
   genres: () => apiFetch<Genre[]>("/content/genres"),
+
+  related: (idOrSlug: string) =>
+    apiFetch<Content[]>(`/content/${idOrSlug}/related`),
+
+  access: (id: string, token: string) =>
+    apiFetch<ContentAccess>(`/content/${id}/access`, { token }),
 
   watch: (id: string, token: string, episodeId?: string) =>
     apiFetch<WatchSources>(
@@ -176,6 +195,15 @@ export const billingApi = {
       method: "POST",
       token,
     }),
+
+  rent: (token: string, contentId: string) =>
+    apiFetch<RentCheckoutResult>("/billing/rent", {
+      method: "POST",
+      body: { contentId },
+      token,
+    }),
+
+  rentals: (token: string) => apiFetch<Rental[]>("/billing/rentals", { token }),
 };
 
 export const activityApi = {
@@ -191,6 +219,33 @@ export const activityApi = {
     }),
 
   history: (token: string) => apiFetch<HistoryItem[]>("/me/history", { token }),
+
+  removeHistory: (token: string, contentId: string) =>
+    apiFetch<{ success: boolean }>(`/me/history/${contentId}`, {
+      method: "DELETE",
+      token,
+    }),
+
+  updateProfile: (token: string, payload: { name?: string }) =>
+    apiFetch<User>("/me/profile", { method: "PATCH", body: payload, token }),
+
+  async uploadAvatar(token: string, file: File): Promise<User> {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_URL}/me/avatar`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new ApiError(
+        normalizeError(data) ?? "Зураг хуулж чадсангүй",
+        res.status,
+      );
+    }
+    return data as User;
+  },
 
   saveProgress: (
     token: string,

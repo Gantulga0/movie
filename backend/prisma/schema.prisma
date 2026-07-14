@@ -32,6 +32,7 @@ model User {
   ratings       Rating[]
   subscriptions Subscription[]
   payments      Payment[]
+  rentals       Rental[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -73,16 +74,28 @@ model Otp {
 model Content {
   id          String        @id @default(uuid())
   title       String
+  // Original (foreign) title shown next to the localized one.
+  originalTitle String?
   slug        String        @unique
   description String?
   type        ContentType
   status      ContentStatus @default(DRAFT)
+  // Airing state shown on the detail page: releasing vs finished.
+  releaseStatus ReleaseStatus @default(COMPLETED)
 
   releaseYear Int?
   durationSec Int?
   ageRating   String?
   language    String?
   country     String?
+  director    String?
+
+  // ---- Individual rental (one-time paid access) ----
+  // A title can be inside the subscription, rentable, both, or neither.
+  isRentable           Boolean @default(false)
+  rentalPrice          Int? // MNT (₮); required when isRentable
+  rentalDurationHours  Int     @default(48)
+  subscriptionIncluded Boolean @default(true)
 
   posterUrl   String?
   backdropUrl String?
@@ -100,6 +113,8 @@ model Content {
   watchHistory WatchHistory[]
   watchlist    Watchlist[]
   ratings      Rating[]
+  rentals      Rental[]
+  payments     Payment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -309,6 +324,8 @@ model Payment {
   // The plan being purchased; the subscription is created when payment lands.
   planId         String?
   subscriptionId String?
+  // Rental payments target a content instead of a plan.
+  contentId String?
 
   amount Int // MNT (₮)
   method PaymentMethod
@@ -322,12 +339,36 @@ model Payment {
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan         Plan?         @relation(fields: [planId], references: [id])
   subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  content      Content?      @relation(fields: [contentId], references: [id])
+  rental       Rental?
 
   createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([status])
   @@index([invoiceId])
+}
+
+// A paid one-time entitlement to a single title. Created only after the
+// rental payment is verified; playback is allowed while endsAt is ahead.
+model Rental {
+  id String @id @default(uuid())
+
+  userId    String
+  contentId String
+  paymentId String? @unique
+
+  startsAt DateTime @default(now())
+  endsAt   DateTime
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  payment Payment? @relation(fields: [paymentId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, endsAt])
+  @@index([contentId])
 }
 
 // ---------------------------------------------------------------------------
@@ -348,6 +389,12 @@ enum ContentStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
+}
+
+// Airing state of a title: still releasing new episodes vs finished.
+enum ReleaseStatus {
+  RELEASING
+  COMPLETED
 }
 
 enum VideoQuality {

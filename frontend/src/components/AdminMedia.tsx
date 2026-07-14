@@ -97,7 +97,7 @@ export function MediaSection({
       </p>
 
       {error ? (
-        <p className="mt-2 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-xs text-red-200">
+        <p className="mt-2 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
           {error}
         </p>
       ) : null}
@@ -194,7 +194,7 @@ export function VideoAssetsSection({
       </p>
 
       {error ? (
-        <p className="mt-2 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-xs text-red-200">
+        <p className="mt-2 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
           {error}
         </p>
       ) : null}

@@ -73,7 +73,7 @@ export default function LoginPage() {
     >
       <form onSubmit={handleSubmit} noValidate>
         {formError ? (
-          <div className="mb-4 rounded-lg border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-red-200">
+          <div className="mb-4 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
             {formError}
           </div>
         ) : null}
@@ -107,7 +107,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="mt-2 w-full rounded-lg bg-brand py-3 text-base font-bold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-2 w-full rounded-lg bg-accent-strong py-3 text-base font-bold text-white shadow-[0_4px_20px_rgba(93,110,245,0.3)] transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting ? "Нэвтэрч байна…" : "Нэвтрэх"}
         </button>

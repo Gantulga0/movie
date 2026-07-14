@@ -5,7 +5,11 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomBytes } from 'crypto';
 import { mkdir, writeFile } from 'fs/promises';
@@ -33,6 +37,9 @@ const PRESIGN_FOLDERS = new Set([
 ]);
 
 const PRESIGN_EXPIRES_SECONDS = 3600;
+
+/** Playback links live long enough for one sitting, then expire. */
+const PLAYBACK_URL_EXPIRES_SECONDS = 6 * 3600;
 
 /** Where local-mode uploads land: served by Next.js at /uploads/... */
 export function localUploadRoot(): string {
@@ -146,6 +153,21 @@ export class StorageService {
       key: `${folder}/${file.filename}`,
       url: `/uploads/${folder}/${file.filename}`,
     };
+  }
+
+  /**
+   * Short-lived signed GET URL for playback. Keeps R2 objects private —
+   * entitled viewers stream via expiring links instead of permanent URLs.
+   */
+  async presignGetUrl(
+    key: string,
+    expiresIn = PLAYBACK_URL_EXPIRES_SECONDS,
+  ): Promise<string> {
+    return getSignedUrl(
+      this.getClient(),
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      { expiresIn },
+    );
   }
 
   /** Direct-to-R2 upload URL for large files. R2 mode only. */

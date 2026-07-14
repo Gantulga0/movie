@@ -10,7 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { BillingService } from './billing.service';
-import { CheckoutDto } from './dto/checkout.dto';
+import { CheckoutDto, RentDto } from './dto/checkout.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { SafeUser } from '../users/users.service';
@@ -34,6 +34,20 @@ export class BillingController {
   @UseGuards(JwtAuthGuard)
   checkout(@CurrentUser() user: SafeUser, @Body() dto: CheckoutDto) {
     return this.billing.checkout(user, dto.planId, dto.method);
+  }
+
+  /** One-time rental purchase for a single title. */
+  @Post('rent')
+  @UseGuards(JwtAuthGuard)
+  rent(@CurrentUser() user: SafeUser, @Body() dto: RentDto) {
+    return this.billing.rentCheckout(user, dto.contentId);
+  }
+
+  /** The caller's rentals (active and expired). */
+  @Get('rentals')
+  @UseGuards(JwtAuthGuard)
+  rentals(@CurrentUser() user: SafeUser) {
+    return this.billing.myRentals(user.id);
   }
 
   @Post('payments/:id/check')

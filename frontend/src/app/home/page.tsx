@@ -1,307 +1,370 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Navbar } from "@/components/Navbar";
-import { ContentCard, CardSkeleton } from "@/components/ContentCard";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AppShell } from "@/components/layout/AppShell";
+import { ContentCard } from "@/components/ContentCard";
+import { ContentRow } from "@/components/ContentRow";
+import { ContinueWatchingCard } from "@/components/ContinueWatchingCard";
+import { useDetails } from "@/components/details/DetailsModalProvider";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
+import {
+  IconCheck,
+  IconInfo,
+  IconPlay,
+  IconPlus,
+} from "@/components/ui/icons";
 import { useAuth } from "@/lib/auth-context";
-import { contentApi } from "@/lib/api";
-import type { Content, Genre } from "@/lib/types";
-import { formatDuration } from "@/lib/format";
+import { activityApi, contentApi } from "@/lib/api";
+import type { Content, Genre, HistoryItem } from "@/lib/types";
+import { formatDuration, watchedPercent } from "@/lib/format";
+
+const HERO_INTERVAL_MS = 8000;
+/** How many genre rails the home page renders. */
+const GENRE_ROW_LIMIT = 8;
+const ROW_ITEM_LIMIT = 18;
+
+export default function HomePage() {
+  return (
+    <AppShell>
+      <HomeContent />
+    </AppShell>
+  );
+}
 
 function HomeContent() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const { user, loading: authLoading } = useAuth();
+  const { user, token } = useAuth();
 
-  const type = params.get("type") as "MOVIE" | "SERIES" | null;
-  const genre = params.get("genre");
-
-  const [items, setItems] = useState<Content[]>([]);
   const [featured, setFeatured] = useState<Content[]>([]);
   const [featuredLoading, setFeaturedLoading] = useState(true);
-  const [genres, setGenres] = useState<Genre[]>([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [heroIndex, setHeroIndex] = useState(0);
-
-  // Guard: unauthenticated visitors are sent to login.
-  useEffect(() => {
-    if (!authLoading && !user) router.replace("/login");
-  }, [authLoading, user, router]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [newest, setNewest] = useState<Content[]>([]);
+  const [newestLoading, setNewestLoading] = useState(true);
+  const [genreRows, setGenreRows] = useState<Array<{ genre: Genre; items: Content[] }>>([]);
+  const [genresLoading, setGenresLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
-    contentApi.genres().then(setGenres).catch(() => setGenres([]));
     contentApi
       .list({ featured: true, limit: 6 })
       .then((res) => setFeatured(res.items))
       .catch(() => setFeatured([]))
       .finally(() => setFeaturedLoading(false));
+
+    contentApi
+      .list({ sort: "new", limit: ROW_ITEM_LIMIT })
+      .then((res) => setNewest(res.items))
+      .catch(() => setNewest([]))
+      .finally(() => setNewestLoading(false));
+
+    // Genre rails come from real genre data; empty genres are dropped.
+    contentApi
+      .genres()
+      .then(async (genres) => {
+        const rows = await Promise.all(
+          genres.slice(0, GENRE_ROW_LIMIT).map(async (genre) => {
+            const res = await contentApi
+              .list({ genre: genre.slug, limit: ROW_ITEM_LIMIT })
+              .catch(() => null);
+            return { genre, items: res?.items ?? [] };
+          }),
+        );
+        setGenreRows(rows.filter((r) => r.items.length > 0));
+      })
+      .catch(() => setGenreRows([]))
+      .finally(() => setGenresLoading(false));
   }, [user]);
 
-  // Search is debounced so typing doesn't spam the API. The skeleton only
-  // appears once the debounce fires, keeping old results visible meanwhile.
   useEffect(() => {
-    if (!user) return;
-    const id = setTimeout(() => {
-      setLoading(true);
-      contentApi
-        .list({
-          type: type ?? undefined,
-          genre: genre ?? undefined,
-          search: search || undefined,
-          limit: 48,
-        })
-        .then((res) => setItems(res.items))
-        .catch(() => setItems([]))
-        .finally(() => setLoading(false));
-    }, search ? 350 : 0);
-    return () => clearTimeout(id);
-  }, [user, type, genre, search]);
+    if (!token) return;
+    activityApi
+      .history(token)
+      .then(setHistory)
+      .catch(() => setHistory([]));
+  }, [token]);
 
-  // Featured hero auto-advances.
-  useEffect(() => {
-    if (featured.length < 2) return;
-    const id = setInterval(
-      () => setHeroIndex((i) => (i + 1) % featured.length),
-      7000,
-    );
-    return () => clearInterval(id);
-  }, [featured.length]);
+  const removeFromContinue = useCallback(
+    (contentId: string) => {
+      setHistory((rows) => rows.filter((r) => r.content.id !== contentId));
+      if (token) activityApi.removeHistory(token, contentId).catch(() => undefined);
+    },
+    [token],
+  );
 
-  const hero = featured[heroIndex];
-  const showHero = !search && !genre && !type;
+  // One row per title — the latest unfinished episode/session wins.
+  const continueWatching = useMemo(() => {
+    const seen = new Set<string>();
+    const rows: HistoryItem[] = [];
+    for (const row of history) {
+      if (row.completed || row.progressSec < 30) continue;
+      if (seen.has(row.content.id)) continue;
+      seen.add(row.content.id);
+      rows.push(row);
+    }
+    return rows.slice(0, 12);
+  }, [history]);
 
-  const filterHref = useMemo(() => {
-    return (next: { type?: string | null; genre?: string | null }) => {
-      const search = new URLSearchParams();
-      const t = next.type === undefined ? type : next.type;
-      const g = next.genre === undefined ? genre : next.genre;
-      if (t) search.set("type", t);
-      if (g) search.set("genre", g);
-      const out = search.toString();
-      return out ? `/home?${out}` : "/home";
-    };
-  }, [type, genre]);
-
-  if (authLoading || !user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-brand" />
-      </div>
-    );
-  }
+  const progressByContent = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of continueWatching) {
+      const duration = row.episode?.durationSec ?? row.content.durationSec;
+      const pct = watchedPercent(row.progressSec, duration);
+      if (pct != null) map.set(row.content.id, pct);
+    }
+    return map;
+  }, [continueWatching]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
+    <div className="pb-16">
+      <HomeHero featured={featured} loading={featuredLoading} />
 
-      {/* Featured hero — skeleton while the featured list loads */}
-      {showHero && featuredLoading ? (
-        <section className="relative isolate flex min-h-[62vh] items-end overflow-hidden">
-          <div className="absolute inset-0 -z-10 animate-pulse bg-white/[.04]" />
-          <div className="max-w-2xl px-5 pb-14 sm:px-10">
-            <div className="h-10 w-80 max-w-full animate-pulse rounded-lg bg-white/10 sm:h-14" />
-            <div className="mt-4 flex gap-2">
-              <div className="h-5 w-14 animate-pulse rounded bg-white/10" />
-              <div className="h-5 w-20 animate-pulse rounded bg-white/10" />
-              <div className="h-5 w-16 animate-pulse rounded bg-white/10" />
-            </div>
-            <div className="mt-5 space-y-2">
-              <div className="h-3.5 w-[34rem] max-w-full animate-pulse rounded bg-white/8" />
-              <div className="h-3.5 w-[28rem] max-w-full animate-pulse rounded bg-white/8" />
-            </div>
-            <div className="mt-7 flex gap-3">
-              <div className="h-12 w-32 animate-pulse rounded-md bg-white/10" />
-              <div className="h-12 w-36 animate-pulse rounded-md bg-white/8" />
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {/* Featured hero */}
-      {showHero && !featuredLoading && hero ? (
-        <section className="relative isolate flex min-h-[62vh] items-end overflow-hidden">
-          <div className="absolute inset-0 -z-10">
-            {hero.backdropUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={hero.id}
-                src={hero.backdropUrl}
-                alt=""
-                className="animate-fade h-full w-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                }}
-              />
-            ) : (
-              <div
-                className="h-full w-full"
-                style={{
-                  background:
-                    "radial-gradient(120% 120% at 75% 15%, #3b1d6e 0%, #131033 45%, #050509 100%)",
-                }}
-              />
-            )}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
-          </div>
-
-          <div key={hero.id} className="animate-rise max-w-2xl px-5 pb-14 sm:px-10">
-            <h1 className="display text-4xl font-bold text-white drop-shadow-lg sm:text-6xl">
-              {hero.title}
-            </h1>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-white/70">
-              {hero.releaseYear ? (
-                <span className="font-semibold text-white">{hero.releaseYear}</span>
-              ) : null}
-              {hero.genres.slice(0, 3).map((g) => (
-                <span
-                  key={g.genre.id}
-                  className="rounded bg-white/10 px-2 py-0.5 text-xs font-medium text-white/80"
-                >
-                  {g.genre.name}
-                </span>
-              ))}
-              {hero.durationSec ? <span>{formatDuration(hero.durationSec)}</span> : null}
-            </div>
-            <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/80 sm:text-base">
-              {hero.description}
-            </p>
-            <div className="mt-6 flex gap-3">
-              <Link
-                href={`/title/${hero.slug}`}
-                className="rounded-md bg-brand px-6 py-3 text-base font-bold text-white shadow-xl shadow-brand/30 transition hover:bg-brand-hover"
-              >
-                ▶ Үзэх
-              </Link>
-              <Link
-                href={`/title/${hero.slug}`}
-                className="rounded-md border border-white/25 bg-white/10 px-6 py-3 text-base font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"
-              >
-                Дэлгэрэнгүй
-              </Link>
-            </div>
-          </div>
-
-          {featured.length > 1 ? (
-            <div className="absolute bottom-6 right-6 flex gap-1.5">
-              {featured.map((f, i) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setHeroIndex(i)}
-                  aria-label={`${i + 1}-р онцлох`}
-                  className={`h-1.5 rounded-full transition-all ${
-                    i === heroIndex ? "w-7 bg-brand" : "w-3.5 bg-white/40"
-                  }`}
-                />
-              ))}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
-      {/* Filters */}
-      <section className="px-5 pt-8 sm:px-10">
-        <div className="flex flex-wrap items-center gap-2">
-          <FilterChip href={filterHref({ type: null })} active={!type}>
-            Бүгд
-          </FilterChip>
-          <FilterChip href={filterHref({ type: "MOVIE" })} active={type === "MOVIE"}>
-            Кино
-          </FilterChip>
-          <FilterChip href={filterHref({ type: "SERIES" })} active={type === "SERIES"}>
-            Цуврал
-          </FilterChip>
-
-          <span className="mx-1 h-5 w-px bg-white/15" aria-hidden />
-
-          <FilterChip href={filterHref({ genre: null })} active={!genre}>
-            Бүх төрөл
-          </FilterChip>
-          {genres.map((g) => (
-            <FilterChip
-              key={g.id}
-              href={filterHref({ genre: g.slug })}
-              active={genre === g.slug}
-            >
-              {g.name}
-            </FilterChip>
+      {continueWatching.length > 0 ? (
+        <ContentRow title="Үзсээр байгаа" wide>
+          {continueWatching.map((item) => (
+            <ContinueWatchingCard
+              key={item.id}
+              item={item}
+              onRemove={removeFromContinue}
+            />
           ))}
+        </ContentRow>
+      ) : null}
 
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Хайх…"
-            aria-label="Кино хайх"
-            className="ml-auto w-full max-w-[220px] rounded-md border border-white/15 bg-white/5 px-3.5 py-2 text-sm text-white placeholder-white/40 outline-none transition focus:border-brand sm:w-auto"
+      <ContentRow
+        title="Шинээр нэмэгдсэн"
+        viewAllHref="/browse?sort=new"
+        loading={newestLoading}
+      >
+        {newest.map((content) => (
+          <ContentCard
+            key={content.id}
+            content={content}
+            progressPercent={progressByContent.get(content.id)}
           />
-        </div>
-      </section>
+        ))}
+      </ContentRow>
 
-      {/* Grid */}
-      <section className="px-5 py-8 sm:px-10">
-        {loading ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <CardSkeleton key={i} />
-            ))}
-          </div>
-        ) : items.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="text-white/60">Илэрц олдсонгүй.</p>
-            {search || genre || type ? (
-              <Link
-                href="/home"
-                className="mt-3 inline-block text-sm font-semibold text-brand hover:text-brand-hover"
-              >
-                Бүх контентыг харах
-              </Link>
-            ) : null}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+      {genresLoading ? (
+        <ContentRow title="Ангилал" loading>
+          {[]}
+        </ContentRow>
+      ) : (
+        genreRows.map(({ genre, items }) => (
+          <ContentRow
+            key={genre.id}
+            title={genre.name}
+            viewAllHref={`/browse?genre=${genre.slug}`}
+          >
             {items.map((content) => (
-              <ContentCard key={content.id} content={content} />
+              <ContentCard
+                key={content.id}
+                content={content}
+                progressPercent={progressByContent.get(content.id)}
+              />
             ))}
-          </div>
-        )}
-      </section>
+          </ContentRow>
+        ))
+      )}
     </div>
   );
 }
 
-function FilterChip({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
-        active
-          ? "bg-white text-black"
-          : "bg-white/8 text-white/70 hover:bg-white/15 hover:text-white"
-      }`}
-    >
-      {children}
-    </Link>
-  );
-}
+// ---------------------------------------------------------------------------
 
-export default function HomePage() {
+function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean }) {
+  const { token } = useAuth();
+  const { openDetails } = useDetails();
+  const [index, setIndex] = useState(0);
+  const [inList, setInList] = useState<Record<string, boolean>>({});
+
+  // Auto-advance while more than one slide exists.
+  useEffect(() => {
+    if (featured.length < 2) return;
+    const id = setInterval(
+      () => setIndex((i) => (i + 1) % featured.length),
+      HERO_INTERVAL_MS,
+    );
+    return () => clearInterval(id);
+  }, [featured.length]);
+
+  // Which featured titles are on the caller's list (for the +/✓ button).
+  useEffect(() => {
+    if (!token || featured.length === 0) return;
+    activityApi
+      .watchlist(token)
+      .then((items) => {
+        const map: Record<string, boolean> = {};
+        for (const it of items) map[it.content.id] = true;
+        setInList(map);
+      })
+      .catch(() => undefined);
+  }, [token, featured]);
+
+  const hero = featured[index];
+
+  async function toggleList(content: Content) {
+    if (!token) return;
+    const has = inList[content.id];
+    setInList((m) => ({ ...m, [content.id]: !has }));
+    try {
+      if (has) await activityApi.removeWatchlist(token, content.id);
+      else await activityApi.addWatchlist(token, content.id);
+    } catch {
+      setInList((m) => ({ ...m, [content.id]: has }));
+    }
+  }
+
+  if (loading) {
+    return (
+      <section className="relative isolate flex min-h-[62vh] items-end overflow-hidden">
+        <div className="absolute inset-0 -z-10 skeleton rounded-none" />
+        <div className="max-w-2xl px-5 pb-14 sm:px-10">
+          <Skeleton className="h-12 w-80 max-w-full sm:h-16" />
+          <div className="mt-4 flex gap-2">
+            <Skeleton className="h-5 w-14" />
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-5 w-16" />
+          </div>
+          <div className="mt-5 space-y-2">
+            <Skeleton className="h-3.5 w-[34rem] max-w-full" />
+            <Skeleton className="h-3.5 w-[28rem] max-w-full" />
+          </div>
+          <div className="mt-7 flex gap-3">
+            <Skeleton className="h-12 w-32" />
+            <Skeleton className="h-12 w-36" />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!hero) return null;
+
   return (
-    <Suspense fallback={null}>
-      <HomeContent />
-    </Suspense>
+    <section className="relative isolate flex min-h-[66vh] items-end overflow-hidden">
+      {/* Backdrop */}
+      <div className="absolute inset-0 -z-10">
+        {hero.backdropUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={hero.id}
+            src={hero.backdropUrl}
+            alt=""
+            className="animate-fade animate-kenburns h-full w-full object-cover"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+          />
+        ) : (
+          <div
+            className="h-full w-full"
+            style={{
+              background:
+                "radial-gradient(120% 120% at 75% 15%, #26335e 0%, #131b31 45%, #05080f 100%)",
+            }}
+          />
+        )}
+        {/* Readability + stage gradients, then the projector beam */}
+        <div className="absolute inset-0 bg-gradient-to-r from-background-deep/90 via-background-deep/45 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background-deep/40" />
+        <div className="projector-light absolute inset-0" />
+      </div>
+
+      <div key={hero.id} className="animate-rise w-full max-w-2xl px-5 pb-14 sm:px-10">
+        <p className="text-xs font-bold uppercase tracking-[0.3em] text-accent">
+          {hero.type === "SERIES" ? "Онцлох цуврал" : "Онцлох кино"}
+        </p>
+        <button
+          type="button"
+          onClick={() => openDetails(hero.slug)}
+          className="mt-2 block text-left"
+        >
+          <h1 className="display text-4xl font-bold leading-none text-foreground drop-shadow-lg sm:text-6xl">
+            {hero.title}
+          </h1>
+          {hero.originalTitle ? (
+            <p className="mt-1.5 text-base font-medium text-foreground/55">
+              {hero.originalTitle}
+            </p>
+          ) : null}
+        </button>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-foreground/70">
+          {hero.releaseYear ? (
+            <span className="font-semibold text-foreground">{hero.releaseYear}</span>
+          ) : null}
+          {hero.ageRating ? (
+            <span className="rounded border border-line-strong px-1.5 py-0.5 text-xs">
+              {hero.ageRating}
+            </span>
+          ) : null}
+          {hero.genres.slice(0, 3).map((g) => (
+            <span
+              key={g.genre.id}
+              className="rounded-md bg-white/10 px-2 py-0.5 text-xs font-medium text-foreground/80 backdrop-blur-sm"
+            >
+              {g.genre.name}
+            </span>
+          ))}
+          {hero.durationSec ? <span>{formatDuration(hero.durationSec)}</span> : null}
+        </div>
+
+        {hero.description ? (
+          <p className="mt-4 line-clamp-3 max-w-xl text-sm leading-relaxed text-foreground/80 sm:text-base">
+            {hero.description}
+          </p>
+        ) : null}
+
+        <div className="mt-6 flex flex-wrap items-center gap-2.5">
+          <ButtonLink href={`/watch/${hero.id}`} variant="primary" size="lg">
+            <IconPlay size={18} />
+            Үзэх
+          </ButtonLink>
+          {hero.trailerUrl ? (
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => openDetails(hero.slug, { trailer: true })}
+            >
+              Трейлер
+            </Button>
+          ) : null}
+          <Button variant="outline" size="lg" onClick={() => openDetails(hero.slug)}>
+            <IconInfo size={18} />
+            Дэлгэрэнгүй
+          </Button>
+          <Button
+            variant="ghost"
+            size="lg"
+            onClick={() => toggleList(hero)}
+            aria-pressed={Boolean(inList[hero.id])}
+            aria-label={
+              inList[hero.id] ? "Жагсаалтаас хасах" : "Жагсаалтад нэмэх"
+            }
+          >
+            {inList[hero.id] ? <IconCheck size={19} /> : <IconPlus size={19} />}
+            Жагсаалт
+          </Button>
+        </div>
+      </div>
+
+      {/* Slide indicators */}
+      {featured.length > 1 ? (
+        <div className="absolute bottom-6 right-6 flex gap-1.5">
+          {featured.map((f, i) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setIndex(i)}
+              aria-label={`${i + 1}-р онцлох`}
+              aria-current={i === index}
+              className={`h-1.5 rounded-full transition-all ${
+                i === index ? "w-7 bg-accent" : "w-3.5 bg-white/30 hover:bg-white/50"
+              }`}
+            />
+          ))}
+        </div>
+      ) : null}
+    </section>
   );
 }

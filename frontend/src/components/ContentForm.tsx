@@ -6,24 +6,34 @@ import type { ContentDetail, Genre } from "@/lib/types";
 
 export interface ContentFormValues {
   title: string;
+  originalTitle: string;
   type: "MOVIE" | "SERIES";
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+  releaseStatus: "RELEASING" | "COMPLETED";
   description: string;
   releaseYear: string;
   durationMin: string;
   ageRating: string;
   language: string;
   country: string;
+  director: string;
   cast: string;
   featured: boolean;
   genres: string[];
+  // Rental settings
+  isRentable: boolean;
+  rentalPrice: string;
+  rentalDurationHours: string;
+  subscriptionIncluded: boolean;
 }
 
 export function toPayload(values: ContentFormValues) {
   return {
     title: values.title.trim(),
+    originalTitle: values.originalTitle.trim() || undefined,
     type: values.type,
     status: values.status,
+    releaseStatus: values.releaseStatus,
     description: values.description.trim() || undefined,
     releaseYear: values.releaseYear ? Number(values.releaseYear) : undefined,
     durationSec: values.durationMin
@@ -32,20 +42,29 @@ export function toPayload(values: ContentFormValues) {
     ageRating: values.ageRating.trim() || undefined,
     language: values.language.trim() || undefined,
     country: values.country.trim() || undefined,
+    director: values.director.trim() || undefined,
     cast: values.cast
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
     featured: values.featured,
     genres: values.genres,
+    isRentable: values.isRentable,
+    rentalPrice: values.rentalPrice ? Number(values.rentalPrice) : undefined,
+    rentalDurationHours: values.rentalDurationHours
+      ? Number(values.rentalDurationHours)
+      : undefined,
+    subscriptionIncluded: values.subscriptionIncluded,
   };
 }
 
 export function fromContent(content: ContentDetail): ContentFormValues {
   return {
     title: content.title,
+    originalTitle: content.originalTitle ?? "",
     type: content.type,
     status: content.status,
+    releaseStatus: content.releaseStatus,
     description: content.description ?? "",
     releaseYear: content.releaseYear ? String(content.releaseYear) : "",
     durationMin: content.durationSec
@@ -54,25 +73,37 @@ export function fromContent(content: ContentDetail): ContentFormValues {
     ageRating: content.ageRating ?? "",
     language: content.language ?? "",
     country: content.country ?? "",
+    director: content.director ?? "",
     cast: content.cast.join(", "),
     featured: content.featured,
     genres: content.genres.map((g) => g.genre.name),
+    isRentable: content.isRentable,
+    rentalPrice: content.rentalPrice ? String(content.rentalPrice) : "",
+    rentalDurationHours: String(content.rentalDurationHours ?? 48),
+    subscriptionIncluded: content.subscriptionIncluded,
   };
 }
 
 export const EMPTY_FORM: ContentFormValues = {
   title: "",
+  originalTitle: "",
   type: "MOVIE",
   status: "DRAFT",
+  releaseStatus: "COMPLETED",
   description: "",
   releaseYear: "",
   durationMin: "",
   ageRating: "",
   language: "",
   country: "",
+  director: "",
   cast: "",
   featured: false,
   genres: [],
+  isRentable: false,
+  rentalPrice: "",
+  rentalDurationHours: "48",
+  subscriptionIncluded: true,
 };
 
 interface ContentFormProps {
@@ -122,13 +153,13 @@ export function ContentForm({
   return (
     <form onSubmit={handleSubmit} noValidate className="max-w-3xl">
       {error ? (
-        <div className="mb-5 rounded-lg border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-red-200">
+        <div className="mb-5 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
           {error}
         </div>
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2">
+        <div>
           <label htmlFor="cf-title" className={label}>
             Гарчиг *
           </label>
@@ -139,6 +170,19 @@ export function ContentForm({
             onChange={(e) => set("title", e.target.value)}
             placeholder="Киноны нэр"
             required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="cf-original-title" className={label}>
+            Эх гарчиг
+          </label>
+          <input
+            id="cf-original-title"
+            className={input}
+            value={values.originalTitle}
+            onChange={(e) => set("originalTitle", e.target.value)}
+            placeholder="Original title"
           />
         </div>
 
@@ -173,6 +217,39 @@ export function ContentForm({
             <option value="PUBLISHED">Нийтлэх</option>
             <option value="ARCHIVED">Архивлах</option>
           </select>
+        </div>
+
+        <div>
+          <label htmlFor="cf-release-status" className={label}>
+            Гаралтын төлөв
+          </label>
+          <select
+            id="cf-release-status"
+            className={input}
+            value={values.releaseStatus}
+            onChange={(e) =>
+              set(
+                "releaseStatus",
+                e.target.value as ContentFormValues["releaseStatus"],
+              )
+            }
+          >
+            <option value="RELEASING">Одоо гарч байгаа</option>
+            <option value="COMPLETED">Гарч дууссан</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="cf-director" className={label}>
+            Найруулагч
+          </label>
+          <input
+            id="cf-director"
+            className={input}
+            value={values.director}
+            onChange={(e) => set("director", e.target.value)}
+            placeholder="Chad Stahelski"
+          />
         </div>
 
         <div className="sm:col-span-2">
@@ -285,17 +362,94 @@ export function ContentForm({
             type="checkbox"
             checked={values.featured}
             onChange={(e) => set("featured", e.target.checked)}
-            className="h-4 w-4 accent-[#e50914]"
+            className="h-4 w-4 accent-(--accent)"
           />
           <span className="text-sm text-white/80">
             Онцлох — нүүр хуудасны hero хэсэгт гаргах
           </span>
         </label>
+
+        {/* Rental settings */}
+        <fieldset className="rounded-xl border border-line bg-white/[.03] p-4 sm:col-span-2">
+          <legend className="px-1 text-sm font-bold text-white/85">
+            Хандалт ба түрээс
+          </legend>
+
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={values.subscriptionIncluded}
+              onChange={(e) => set("subscriptionIncluded", e.target.checked)}
+              className="h-4 w-4 accent-(--accent)"
+            />
+            <span className="text-sm text-white/80">
+              Багцад багтана — эрхийн багцтай хэрэглэгчид үзнэ
+            </span>
+          </label>
+
+          <label className="mt-3 flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={values.isRentable}
+              onChange={(e) => set("isRentable", e.target.checked)}
+              className="h-4 w-4 accent-(--accent)"
+            />
+            <span className="text-sm text-white/80">
+              Түрээслэх боломжтой — нэг удаагийн төлбөрөөр үзнэ
+            </span>
+          </label>
+
+          {values.isRentable ? (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="cf-rental-price" className={label}>
+                  Түрээсийн үнэ (₮) *
+                </label>
+                <input
+                  id="cf-rental-price"
+                  type="number"
+                  min={100}
+                  className={input}
+                  value={values.rentalPrice}
+                  onChange={(e) => set("rentalPrice", e.target.value)}
+                  placeholder="5000"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="cf-rental-duration" className={label}>
+                  Түрээсийн хугацаа (цаг)
+                </label>
+                <input
+                  id="cf-rental-duration"
+                  type="number"
+                  min={1}
+                  max={720}
+                  className={input}
+                  value={values.rentalDurationHours}
+                  onChange={(e) => set("rentalDurationHours", e.target.value)}
+                  placeholder="48"
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {!values.subscriptionIncluded && !values.isRentable ? (
+            <p className="mt-3 text-xs text-gold">
+              Анхаар: багцад ч багтахгүй, түрээслэгдэхгүй бол энэ контентыг
+              хэн ч үзэж чадахгүй (түр хаагдсан төлөв).
+            </p>
+          ) : null}
+        </fieldset>
       </div>
 
       <button
         type="submit"
-        disabled={submitting || !values.title.trim()}
+        disabled={
+          submitting ||
+          !values.title.trim() ||
+          (values.isRentable && !values.rentalPrice)
+        }
         className="mt-7 rounded-lg bg-brand px-7 py-3 text-base font-bold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
       >
         {submitting ? "Хадгалж байна…" : submitLabel}

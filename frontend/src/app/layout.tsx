@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { Inter, Oswald } from "next/font/google";
+import { Inter, Sofia_Sans_Condensed } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
+import { ToastProvider } from "@/components/ui/Toast";
 
 // Inter carries all body text — full Cyrillic coverage for Mongolian.
 const inter = Inter({
@@ -9,9 +10,9 @@ const inter = Inter({
   subsets: ["latin", "cyrillic"],
 });
 
-// Oswald is the condensed display face for cinematic headings.
-const oswald = Oswald({
-  variable: "--font-oswald",
+// Tall condensed display face — movie-poster headings, Cyrillic included.
+const display = Sofia_Sans_Condensed({
+  variable: "--font-display-face",
   subsets: ["latin", "cyrillic"],
   weight: ["500", "600", "700"],
 });
@@ -30,10 +31,12 @@ export default function RootLayout({
   return (
     <html
       lang="mn"
-      className={`${inter.variable} ${oswald.variable} h-full antialiased`}
+      className={`${inter.variable} ${display.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-background text-foreground">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -18,7 +18,7 @@ interface Slide {
 }
 
 const BASE_GRADIENT =
-  "radial-gradient(120% 120% at 75% 20%, #1d1030 0%, #0e0c1d 45%, #050509 100%)";
+  "radial-gradient(120% 120% at 75% 20%, #1c2647 0%, #10162b 45%, #05080f 100%)";
 
 /** Featured content (curated in the admin panel) becomes a hero slide. */
 function toSlide(content: Content): Slide {
@@ -99,9 +99,10 @@ export default function LandingPage() {
             ) : null}
           </div>
         ))}
-        {/* Readability overlays */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/55 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/20" />
+        {/* Readability overlays + projector beam */}
+        <div className="absolute inset-0 bg-gradient-to-r from-background-deep/90 via-background-deep/55 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background-deep via-background-deep/40 to-background-deep/20" />
+        <div className="projector-light absolute inset-0" />
       </div>
 
       {/* Header */}

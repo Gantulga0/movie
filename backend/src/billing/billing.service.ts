@@ -6,14 +6,30 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  Content,
+  ContentStatus,
   PaymentMethod,
   PaymentStatus,
+  Prisma,
   Role,
   SubscriptionStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { QpayService } from './qpay.service';
 import { SafeUser } from '../users/users.service';
+
+/** Card-level content shape rentals are listed with. */
+const rentalContentSelect = {
+  select: {
+    id: true,
+    title: true,
+    slug: true,
+    type: true,
+    posterUrl: true,
+    releaseYear: true,
+    durationSec: true,
+  },
+} satisfies { select: Prisma.ContentSelect };
 
 @Injectable()
 export class BillingService {
@@ -62,6 +78,76 @@ export class BillingService {
     return Boolean(sub);
   }
 
+  // ---------------------------------------------------------------- rentals
+
+  /** The caller's rentals, newest first. The client splits active/expired. */
+  myRentals(userId: string) {
+    return this.prisma.rental.findMany({
+      where: { userId },
+      orderBy: { endsAt: 'desc' },
+      include: { content: rentalContentSelect },
+      take: 50,
+    });
+  }
+
+  /**
+   * Starts a rental purchase. The price always comes from the database —
+   * anything the client sends is ignored.
+   */
+  async rentCheckout(user: SafeUser, contentId: string) {
+    const content = await this.prisma.content.findFirst({
+      where: { id: contentId, status: ContentStatus.PUBLISHED },
+    });
+    if (!content) {
+      throw new NotFoundException('Контент олдсонгүй');
+    }
+    if (!content.isRentable || !content.rentalPrice) {
+      throw new BadRequestException('Энэ контент түрээслэх боломжгүй');
+    }
+
+    const existing = await this.prisma.rental.findFirst({
+      where: { userId: user.id, contentId, endsAt: { gt: new Date() } },
+    });
+    if (existing) {
+      throw new BadRequestException(
+        'Танд энэ контентын идэвхтэй түрээс байна',
+      );
+    }
+
+    const payment = await this.prisma.payment.create({
+      data: {
+        userId: user.id,
+        contentId: content.id,
+        amount: content.rentalPrice,
+        method: PaymentMethod.QPAY,
+      },
+    });
+
+    const invoice = await this.qpay.createInvoice({
+      paymentId: payment.id,
+      userPublicId: user.publicId,
+      amount: content.rentalPrice,
+      description: `${this.config.get('APP_NAME', 'Infinite')} — Түрээс: ${content.title}`,
+    });
+
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { invoiceId: invoice.invoiceId },
+    });
+
+    return {
+      paymentId: payment.id,
+      amount: content.rentalPrice,
+      content: {
+        id: content.id,
+        title: content.title,
+        slug: content.slug,
+        rentalDurationHours: content.rentalDurationHours,
+      },
+      invoice,
+    };
+  }
+
   // -------------------------------------------------------------- checkout
 
   /** Creates a PENDING payment and a QPay invoice the client can render. */
@@ -106,7 +192,7 @@ export class BillingService {
   async checkPayment(paymentId: string, user: SafeUser) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
-      include: { subscription: true },
+      include: { subscription: true, rental: true },
     });
     if (!payment) {
       throw new NotFoundException('Төлбөр олдсонгүй');
@@ -115,18 +201,22 @@ export class BillingService {
       throw new ForbiddenException();
     }
     if (payment.status === PaymentStatus.PAID) {
-      return { status: payment.status, subscription: payment.subscription };
+      return {
+        status: payment.status,
+        subscription: payment.subscription,
+        rental: payment.rental,
+      };
     }
     if (!payment.invoiceId) {
-      return { status: payment.status, subscription: null };
+      return { status: payment.status, subscription: null, rental: null };
     }
 
     const result = await this.qpay.checkPayment(payment.invoiceId);
     if (result.paid && result.paidAmount >= payment.amount) {
-      const subscription = await this.finalize(payment.id, result.transactionId);
-      return { status: PaymentStatus.PAID, subscription };
+      const granted = await this.finalize(payment.id, result.transactionId);
+      return { status: PaymentStatus.PAID, ...granted };
     }
-    return { status: payment.status, subscription: null };
+    return { status: payment.status, subscription: null, rental: null };
   }
 
   /** QPay server-to-server callback; also polled from the payment screen. */
@@ -158,8 +248,8 @@ export class BillingService {
     if (payment.status === PaymentStatus.PAID) {
       throw new BadRequestException('Төлбөр аль хэдийн төлөгдсөн');
     }
-    const subscription = await this.finalize(payment.id, `MOCK-TX-${payment.id}`);
-    return { status: PaymentStatus.PAID, subscription };
+    const granted = await this.finalize(payment.id, `MOCK-TX-${payment.id}`);
+    return { status: PaymentStatus.PAID, ...granted };
   }
 
   /** Admin: hands out subscription time without a payment. */
@@ -175,7 +265,10 @@ export class BillingService {
 
   // --------------------------------------------------------------- helpers
 
-  /** Marks the payment PAID and grants (or extends) the subscription. */
+  /**
+   * Marks the payment PAID and grants the purchased entitlement — a
+   * subscription for plan payments, a rental for content payments.
+   */
   private async finalize(paymentId: string, transactionId: string | null) {
     return this.prisma.$transaction(async (tx) => {
       // Row-level idempotency: only one caller flips PENDING → PAID.
@@ -189,27 +282,80 @@ export class BillingService {
       });
       const payment = await tx.payment.findUniqueOrThrow({
         where: { id: paymentId },
-        include: { plan: true, subscription: { include: { plan: true } } },
+        include: {
+          plan: true,
+          content: true,
+          subscription: { include: { plan: true } },
+          rental: true,
+        },
       });
       if (count === 0) {
         // Someone else (callback vs poll) already finalized it.
-        return payment.subscription;
+        return { subscription: payment.subscription, rental: payment.rental };
       }
 
-      const plan = payment.plan;
-      if (!plan) return null;
+      if (payment.plan) {
+        const subscription = await this.createOrExtendSubscriptionTx(
+          tx,
+          payment.userId,
+          payment.plan.id,
+          payment.plan.durationDay,
+        );
+        await tx.payment.update({
+          where: { id: paymentId },
+          data: { subscriptionId: subscription.id },
+        });
+        return { subscription, rental: null };
+      }
 
-      const subscription = await this.createOrExtendSubscriptionTx(
-        tx,
-        payment.userId,
-        plan.id,
-        plan.durationDay,
-      );
-      await tx.payment.update({
-        where: { id: paymentId },
-        data: { subscriptionId: subscription.id },
+      if (payment.content) {
+        const rental = await this.createOrExtendRentalTx(
+          tx,
+          payment.userId,
+          payment.content,
+          paymentId,
+        );
+        return { subscription: null, rental };
+      }
+
+      return { subscription: null, rental: null };
+    });
+  }
+
+  /**
+   * Grants the rental entitlement. If an active rental somehow already
+   * exists (double payment), the paid time stacks instead of duplicating.
+   */
+  private async createOrExtendRentalTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    content: Content,
+    paymentId: string,
+  ) {
+    const now = new Date();
+    const durationMs = content.rentalDurationHours * 60 * 60 * 1000;
+
+    const current = await tx.rental.findFirst({
+      where: { userId, contentId: content.id, endsAt: { gt: now } },
+      orderBy: { endsAt: 'desc' },
+    });
+    if (current) {
+      return tx.rental.update({
+        where: { id: current.id },
+        data: { endsAt: new Date(current.endsAt.getTime() + durationMs) },
+        include: { content: rentalContentSelect },
       });
-      return subscription;
+    }
+
+    return tx.rental.create({
+      data: {
+        userId,
+        contentId: content.id,
+        paymentId,
+        startsAt: now,
+        endsAt: new Date(now.getTime() + durationMs),
+      },
+      include: { content: rentalContentSelect },
     });
   }
 

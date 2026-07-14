@@ -58,9 +58,24 @@ export class ActivityService {
       take: 50,
       include: {
         content: contentCard,
-        episode: { select: { id: true, number: true, title: true, seasonId: true } },
+        episode: {
+          select: {
+            id: true,
+            number: true,
+            title: true,
+            durationSec: true,
+            seasonId: true,
+            season: { select: { number: true } },
+          },
+        },
       },
     });
+  }
+
+  /** Drops a title from Continue Watching (all episode rows included). */
+  async removeHistory(userId: string, contentId: string) {
+    await this.prisma.watchHistory.deleteMany({ where: { userId, contentId } });
+    return { success: true };
   }
 
   /**

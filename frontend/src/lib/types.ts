@@ -1,6 +1,8 @@
 export type Role = "USER" | "ADMIN";
 export type ContentType = "MOVIE" | "SERIES";
 export type ContentStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
+export type ReleaseStatus = "RELEASING" | "COMPLETED";
+export type ContentSort = "new" | "year" | "title" | "watched" | "rated";
 export type VideoQuality = "P480" | "P720" | "P1080" | "P4K";
 export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED";
 export type SubscriptionStatus = "ACTIVE" | "EXPIRED" | "CANCELLED";
@@ -65,23 +67,43 @@ export interface Season {
 export interface Content {
   id: string;
   title: string;
+  originalTitle: string | null;
   slug: string;
   description: string | null;
   type: ContentType;
   status: ContentStatus;
+  releaseStatus: ReleaseStatus;
   releaseYear: number | null;
   durationSec: number | null;
   ageRating: string | null;
   language: string | null;
   country: string | null;
+  director: string | null;
   posterUrl: string | null;
   backdropUrl: string | null;
   trailerUrl: string | null;
   cast: string[];
   featured: boolean;
+  isRentable: boolean;
+  rentalPrice: number | null;
+  rentalDurationHours: number;
+  subscriptionIncluded: boolean;
   genres: Array<{ genre: Genre }>;
   createdAt: string;
   updatedAt: string;
+}
+
+/** The caller's access state for one title — drives Watch/Rent buttons. */
+export interface ContentAccess {
+  contentId: string;
+  canWatch: boolean;
+  viaSubscription: boolean;
+  viaRental: boolean;
+  rentalEndsAt: string | null;
+  subscriptionIncluded: boolean;
+  isRentable: boolean;
+  rentalPrice: number | null;
+  rentalDurationHours: number;
 }
 
 export interface ContentDetail extends Content {
@@ -103,7 +125,6 @@ export interface VideoAsset {
   id: string;
   quality: VideoQuality;
   url: string | null;
-  r2Key: string | null;
   mimeType: string | null;
   sizeBytes: number | null;
 }
@@ -158,9 +179,29 @@ export interface CheckoutResult {
   invoice: QpayInvoice;
 }
 
+export interface RentCheckoutResult {
+  paymentId: string;
+  amount: number;
+  content: {
+    id: string;
+    title: string;
+    slug: string;
+    rentalDurationHours: number;
+  };
+  invoice: QpayInvoice;
+}
+
+export interface Rental {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  content: ContentCardData;
+}
+
 export interface PaymentCheck {
   status: PaymentStatus;
   subscription: Subscription | null;
+  rental: Rental | null;
 }
 
 export interface Payment {
@@ -192,7 +233,14 @@ export interface HistoryItem {
   completed: boolean;
   watchedAt: string;
   content: ContentCardData;
-  episode: { id: string; number: number; title: string } | null;
+  episode: {
+    id: string;
+    number: number;
+    title: string;
+    durationSec: number | null;
+    seasonId: string;
+    season: { number: number };
+  } | null;
 }
 
 export interface ContentCardData {
