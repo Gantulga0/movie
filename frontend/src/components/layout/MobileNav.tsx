@@ -31,6 +31,12 @@ export function MobileNav({ onProfile }: { onProfile: () => void }) {
       className="fixed inset-x-0 bottom-0 z-40 bg-background-deep md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
+      {/* iOS toolbar transitions can expose a strip below the dock —
+          keep that zone painted the same black. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-full h-40 bg-background-deep"
+      />
       <div className="grid grid-cols-5 px-2 pb-2 pt-3">
         {ITEMS.map((item) => {
           const active =

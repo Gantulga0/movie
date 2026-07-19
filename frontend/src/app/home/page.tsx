@@ -242,15 +242,28 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
 
   return (
     <section className="relative isolate flex min-h-[82svh] items-end overflow-hidden md:min-h-[66vh]">
-      {/* Backdrop */}
+      {/* Backdrop: portrait poster on phones (banners are wide art that
+          crops to nothing on a narrow screen), wide banner from md up. */}
       <div className="absolute inset-0 -z-10">
-        {hero.backdropUrl ? (
+        {hero.posterUrl ?? hero.backdropUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={`${hero.id}-p`}
+            src={(hero.posterUrl ?? hero.backdropUrl) as string}
+            alt=""
+            className="animate-fade animate-kenburns h-full w-full object-cover md:hidden"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+          />
+        ) : null}
+        {hero.backdropUrl ?? hero.posterUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             key={hero.id}
-            src={hero.backdropUrl}
+            src={(hero.backdropUrl ?? hero.posterUrl) as string}
             alt=""
-            className="animate-fade animate-kenburns h-full w-full object-cover"
+            className="animate-fade animate-kenburns hidden h-full w-full object-cover md:block"
             onError={(e) => {
               e.currentTarget.style.display = "none";
             }}
@@ -266,7 +279,7 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
         )}
         {/* Readability: narrow screens fade bottom-up so the image stays
             full-bleed; wide screens keep the cinematic left-side fade. */}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/45 to-transparent sm:bg-gradient-to-r sm:from-background-deep/90 sm:via-background-deep/45 sm:to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent sm:bg-gradient-to-r sm:from-background-deep/90 sm:via-background-deep/45 sm:to-transparent" />
         <div className="absolute inset-0 hidden bg-gradient-to-t from-background via-transparent to-background-deep/40 sm:block" />
         <div className="projector-light absolute inset-0" />
       </div>

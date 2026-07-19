@@ -14,7 +14,10 @@ interface Slide {
   year: string;
   genres: string[];
   description: string;
+  /** Wide banner art for desktop heroes. */
   image: string | null;
+  /** Portrait key art — banners crop badly on phones, posters don't. */
+  poster: string | null;
 }
 
 const BASE_GRADIENT =
@@ -29,6 +32,7 @@ function toSlide(content: Content): Slide {
     genres: content.genres.slice(0, 3).map((g) => g.genre.name),
     description: content.description ?? "",
     image: content.backdropUrl ?? content.posterUrl,
+    poster: content.posterUrl ?? content.backdropUrl,
   };
 }
 
@@ -82,12 +86,26 @@ export default function LandingPage() {
             }`}
             aria-hidden={i !== active}
           >
+            {/* Phones get portrait key art; wide banners are desktop-only. */}
+            {s.poster ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={s.poster}
+                alt=""
+                className={`absolute inset-0 h-full w-full object-cover md:hidden ${
+                  i === active ? "animate-kenburns" : ""
+                }`}
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            ) : null}
             {s.image ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={s.image}
                 alt=""
-                className={`absolute inset-0 h-full w-full object-cover ${
+                className={`absolute inset-0 hidden h-full w-full object-cover md:block ${
                   i === active ? "animate-kenburns" : ""
                 }`}
                 // A missing file falls back to the gradient instead of a
@@ -99,9 +117,11 @@ export default function LandingPage() {
             ) : null}
           </div>
         ))}
-        {/* Readability overlays + projector beam */}
-        <div className="absolute inset-0 bg-gradient-to-r from-background-deep/90 via-background-deep/55 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-background-deep via-background-deep/40 to-background-deep/20" />
+        {/* Readability overlays + projector beam: phones fade bottom-up so
+            the art stays full-bleed; desktop keeps the left-side fade. */}
+        <div className="absolute inset-0 bg-gradient-to-t from-background-deep via-background-deep/65 to-transparent md:bg-gradient-to-r md:from-background-deep/90 md:via-background-deep/55 md:to-transparent" />
+        <div className="absolute inset-0 hidden bg-gradient-to-t from-background-deep via-background-deep/40 to-background-deep/20 md:block" />
+        <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-background-deep/85 to-transparent md:hidden" />
         <div className="projector-light absolute inset-0" />
       </div>
 

@@ -77,6 +77,16 @@ export function ProfilePanel({ open, onClose }: ProfilePanelProps) {
         tabIndex={-1}
         className="animate-slide-right fixed left-0 top-0 flex h-dvh w-full flex-col overflow-y-auto overscroll-contain bg-background-deep shadow-pop outline-none sm:max-w-sm sm:border-r sm:border-line sm:bg-surface"
       >
+        {/* iOS viewport transitions can expose strips beyond the sheet —
+            keep those zones painted the same black. */}
+        <span
+          aria-hidden
+          className="pointer-events-none fixed inset-x-0 bottom-full h-40 bg-background-deep sm:hidden"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none fixed inset-x-0 top-full h-40 bg-background-deep sm:hidden"
+        />
         {/* Identity */}
         <div className="projector-light relative border-b border-line px-6 pb-6 pt-5">
           <button
