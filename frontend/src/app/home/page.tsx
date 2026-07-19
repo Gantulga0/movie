@@ -241,7 +241,7 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
   if (!hero) return null;
 
   return (
-    <section className="relative isolate flex min-h-[66vh] items-end overflow-hidden">
+    <section className="relative isolate flex min-h-[66svh] items-end overflow-hidden">
       {/* Backdrop */}
       <div className="absolute inset-0 -z-10">
         {hero.backdropUrl ? (
@@ -264,9 +264,11 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
             }}
           />
         )}
-        {/* Readability + stage gradients, then the projector beam */}
-        <div className="absolute inset-0 bg-gradient-to-r from-background-deep/90 via-background-deep/45 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background-deep/40" />
+        {/* Readability: narrow screens fade bottom-up so the image stays
+            full-bleed; wide screens keep the cinematic left-side fade. */}
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/55 to-transparent sm:bg-gradient-to-r sm:from-background-deep/90 sm:via-background-deep/45 sm:to-transparent" />
+        <div className="absolute inset-0 hidden bg-gradient-to-t from-background via-transparent to-background-deep/40 sm:block" />
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-background-deep/70 to-transparent sm:hidden" />
         <div className="projector-light absolute inset-0" />
       </div>
 

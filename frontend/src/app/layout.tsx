@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Sofia_Sans_Condensed } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
@@ -22,6 +22,15 @@ export const metadata: Metadata = {
   title: "Infinite Movie",
   description:
     "Infinite дээр дуртай кино, цувралаа хаанаас ч, хэзээ ч тасралтгүй үзээрэй.",
+};
+
+// viewport-fit=cover lets the app paint edge-to-edge on notched phones;
+// safe-area insets then keep the fixed bars clear of the hardware.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#05080f",
 };
 
 export default function RootLayout({

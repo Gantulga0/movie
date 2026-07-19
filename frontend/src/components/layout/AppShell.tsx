@@ -65,27 +65,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Sidebar expanded={expanded} onToggle={toggle} onProfile={openProfile} />
       </Suspense>
 
-      {/* Mobile top bar — brand only; navigation lives at the bottom. */}
-      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-background-deep/85 px-5 backdrop-blur-md md:hidden">
-        <Link
-          href="/home"
-          className="flex select-none items-center gap-2.5"
-          aria-label="Infinite нүүр хуудас"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/infinity.png"
-            alt=""
-            className="h-8 w-auto drop-shadow-[0_0_14px_rgba(124,140,255,0.55)]"
-          />
-          <span className="display text-2xl font-bold tracking-tight text-foreground">
-            INFINITE
-          </span>
-        </Link>
+      {/* Mobile top bar — fixed so page content can never surface above it;
+          the safe-area padding keeps its glass over the notch/status bar. */}
+      <header
+        className="fixed inset-x-0 top-0 z-40 border-b border-line bg-background-deep/85 backdrop-blur-md md:hidden"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
+        <div className="flex h-14 items-center px-5">
+          <Link
+            href="/home"
+            className="flex select-none items-center gap-2.5"
+            aria-label="Infinite нүүр хуудас"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/infinity.png"
+              alt=""
+              className="h-8 w-auto drop-shadow-[0_0_14px_rgba(124,140,255,0.55)]"
+            />
+            <span className="display text-2xl font-bold tracking-tight text-foreground">
+              INFINITE
+            </span>
+          </Link>
+        </div>
       </header>
 
       <main
-        className={`pb-20 transition-[padding] duration-200 md:pb-0 ${
+        className={`pb-20 pt-[calc(3.5rem+env(safe-area-inset-top))] transition-[padding] duration-200 md:pb-0 md:pt-0 ${
           expanded ? "md:pl-60" : "md:pl-[72px]"
         }`}
       >
