@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
@@ -19,9 +19,14 @@ const SIDEBAR_KEY = "mnflix_sidebar_expanded";
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, loading } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+
+  // Home is immersive on phones: the hero runs edge-to-edge under a
+  // transparent gradient header instead of sitting below a solid bar.
+  const immersive = pathname === "/home";
 
   // Unauthenticated visitors are sent to login.
   useEffect(() => {
@@ -66,9 +71,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </Suspense>
 
       {/* Mobile top bar — fixed so page content can never surface above it;
-          the safe-area padding keeps its glass over the notch/status bar. */}
+          the safe-area padding keeps it over the notch/status bar. On home
+          it becomes a scrim so the hero artwork shows through. */}
       <header
-        className="fixed inset-x-0 top-0 z-40 border-b border-line bg-background-deep/85 backdrop-blur-md md:hidden"
+        className={`fixed inset-x-0 top-0 z-40 md:hidden ${
+          immersive
+            ? "bg-gradient-to-b from-background-deep/90 via-background-deep/40 to-transparent"
+            : "border-b border-line bg-background-deep/85 backdrop-blur-md"
+        }`}
         style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
         <div className="flex h-14 items-center px-5">
@@ -91,9 +101,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main
-        className={`pb-20 pt-[calc(3.5rem+env(safe-area-inset-top))] transition-[padding] duration-200 md:pb-0 md:pt-0 ${
-          expanded ? "md:pl-60" : "md:pl-[72px]"
-        }`}
+        className={`pb-20 transition-[padding] duration-200 md:pb-0 md:pt-0 ${
+          immersive ? "pt-0" : "pt-[calc(3.5rem+env(safe-area-inset-top))]"
+        } ${expanded ? "md:pl-60" : "md:pl-[72px]"}`}
       >
         <PageTransition>{children}</PageTransition>
       </main>

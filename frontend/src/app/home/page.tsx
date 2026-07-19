@@ -216,7 +216,7 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
 
   if (loading) {
     return (
-      <section className="relative isolate flex min-h-[62vh] items-end overflow-hidden">
+      <section className="relative isolate flex min-h-[82svh] items-end overflow-hidden md:min-h-[62vh]">
         <div className="absolute inset-0 -z-10 skeleton rounded-none" />
         <div className="max-w-2xl px-5 pb-14 sm:px-10">
           <Skeleton className="h-12 w-80 max-w-full sm:h-16" />
@@ -241,7 +241,7 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
   if (!hero) return null;
 
   return (
-    <section className="relative isolate flex min-h-[66svh] items-end overflow-hidden">
+    <section className="relative isolate flex min-h-[82svh] items-end overflow-hidden md:min-h-[66vh]">
       {/* Backdrop */}
       <div className="absolute inset-0 -z-10">
         {hero.backdropUrl ? (
@@ -266,9 +266,8 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
         )}
         {/* Readability: narrow screens fade bottom-up so the image stays
             full-bleed; wide screens keep the cinematic left-side fade. */}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/55 to-transparent sm:bg-gradient-to-r sm:from-background-deep/90 sm:via-background-deep/45 sm:to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/45 to-transparent sm:bg-gradient-to-r sm:from-background-deep/90 sm:via-background-deep/45 sm:to-transparent" />
         <div className="absolute inset-0 hidden bg-gradient-to-t from-background via-transparent to-background-deep/40 sm:block" />
-        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-background-deep/70 to-transparent sm:hidden" />
         <div className="projector-light absolute inset-0" />
       </div>
 
