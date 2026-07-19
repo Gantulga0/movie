@@ -75,7 +75,7 @@ export function ProfilePanel({ open, onClose }: ProfilePanelProps) {
         aria-modal="true"
         aria-label="Миний бүртгэл"
         tabIndex={-1}
-        className="animate-slide-right fixed left-0 top-0 flex h-dvh w-full max-w-sm flex-col overflow-y-auto overscroll-contain border-r border-line bg-surface shadow-pop outline-none"
+        className="animate-slide-right fixed left-0 top-0 flex h-dvh w-full flex-col overflow-y-auto overscroll-contain bg-background-deep shadow-pop outline-none sm:max-w-sm sm:border-r sm:border-line sm:bg-surface"
       >
         {/* Identity */}
         <div className="projector-light relative border-b border-line px-6 pb-6 pt-5">

@@ -17,7 +17,10 @@ const ITEMS = [
   { href: "/my-list", label: "Жагсаалт", icon: IconBookmark },
 ];
 
-/** Bottom navigation on small screens; profile opens the account sheet. */
+/**
+ * Bottom dock on phones: a solid near-black bar, icon-only, with a glowing
+ * indicator bar under the active destination. Labels live in aria-labels.
+ */
 export function MobileNav({ onProfile }: { onProfile: () => void }) {
   const pathname = usePathname();
   const { user } = useAuth();
@@ -25,24 +28,36 @@ export function MobileNav({ onProfile }: { onProfile: () => void }) {
   return (
     <nav
       aria-label="Үндсэн цэс"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-background-deep/90 backdrop-blur-md md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 bg-background-deep md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="grid grid-cols-5">
+      <div className="grid grid-cols-5 px-2 pb-2 pt-3">
         {ITEMS.map((item) => {
-          const active = pathname === item.href;
+          const active =
+            pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;
           return (
             <Link
               key={item.href}
               href={item.href}
+              aria-label={item.label}
               aria-current={active ? "page" : undefined}
-              className={`flex flex-col items-center gap-1 py-2.5 text-[10px] font-semibold transition ${
-                active ? "text-accent" : "text-muted"
-              }`}
+              className="flex flex-col items-center gap-1.5 py-1"
             >
-              <Icon size={21} className="icon-live" />
-              {item.label}
+              <Icon
+                size={24}
+                className={`icon-live transition-colors ${
+                  active ? "text-accent" : "text-muted"
+                }`}
+              />
+              <span
+                aria-hidden
+                className={`h-1 w-7 rounded-full transition ${
+                  active
+                    ? "bg-accent shadow-[0_0_8px_rgba(124,140,255,0.8)]"
+                    : "bg-transparent"
+                }`}
+              />
             </Link>
           );
         })}
@@ -50,21 +65,22 @@ export function MobileNav({ onProfile }: { onProfile: () => void }) {
         <button
           type="button"
           onClick={onProfile}
-          className="flex flex-col items-center gap-1 py-2.5 text-[10px] font-semibold text-muted"
+          aria-label="Профайл"
+          className="flex flex-col items-center gap-1.5 py-1"
         >
           {user?.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={user.avatarUrl}
               alt=""
-              className="h-[21px] w-[21px] rounded-full border border-line-strong object-cover"
+              className="h-6 w-6 rounded-full border border-line-strong object-cover"
             />
           ) : (
-            <span className="grid h-[21px] w-[21px] place-items-center rounded-full bg-accent/20 text-[10px] font-bold text-accent">
+            <span className="grid h-6 w-6 place-items-center rounded-full bg-accent/20 text-[11px] font-bold text-accent">
               {(user?.name?.[0] ?? user?.phone?.[0] ?? "?").toUpperCase()}
             </span>
           )}
-          Профайл
+          <span aria-hidden className="h-1 w-7 rounded-full bg-transparent" />
         </button>
       </div>
     </nav>

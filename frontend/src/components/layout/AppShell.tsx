@@ -1,8 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
@@ -19,23 +18,9 @@ const SIDEBAR_KEY = "mnflix_sidebar_expanded";
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const { user, loading } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-
-  // Home is immersive on phones: the hero runs edge-to-edge under a
-  // transparent gradient header instead of sitting below a solid bar.
-  // Once the page scrolls, the scrim solidifies so passing content
-  // never shows through the brand row.
-  const immersive = pathname === "/home";
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 16);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   // Unauthenticated visitors are sent to login.
   useEffect(() => {
@@ -79,40 +64,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Sidebar expanded={expanded} onToggle={toggle} onProfile={openProfile} />
       </Suspense>
 
-      {/* Mobile top bar — fixed so page content can never surface above it;
-          the safe-area padding keeps it over the notch/status bar. On home
-          it becomes a scrim so the hero artwork shows through. */}
-      <header
-        className={`fixed inset-x-0 top-0 z-40 transition-colors duration-300 md:hidden ${
-          immersive && !scrolled
-            ? "bg-gradient-to-b from-background-deep/90 via-background-deep/40 to-transparent"
-            : "border-b border-line bg-background-deep/90 backdrop-blur-md"
-        }`}
-        style={{ paddingTop: "env(safe-area-inset-top)" }}
-      >
-        <div className="flex h-14 items-center px-5">
-          <Link
-            href="/home"
-            className="flex select-none items-center gap-2.5"
-            aria-label="Infinite нүүр хуудас"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/infinity.png"
-              alt=""
-              className="h-8 w-auto drop-shadow-[0_0_14px_rgba(124,140,255,0.55)]"
-            />
-            <span className="display text-2xl font-bold tracking-tight text-foreground">
-              INFINITE
-            </span>
-          </Link>
-        </div>
-      </header>
-
+      {/* Phones have no top bar at all — content owns the whole screen;
+          navigation lives in the solid bottom dock. */}
       <main
-        className={`pb-20 transition-[padding] duration-200 md:pb-0 md:pt-0 ${
-          immersive ? "pt-0" : "pt-[calc(3.5rem+env(safe-area-inset-top))]"
-        } ${expanded ? "md:pl-60" : "md:pl-[72px]"}`}
+        className={`pb-24 transition-[padding] duration-200 md:pb-0 ${
+          expanded ? "md:pl-60" : "md:pl-[72px]"
+        }`}
       >
         <PageTransition>{children}</PageTransition>
       </main>
