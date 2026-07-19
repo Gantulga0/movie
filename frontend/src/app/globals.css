@@ -63,11 +63,17 @@
 html {
   /* Native form controls render dark instead of the OS-default white. */
   color-scheme: dark;
+  /* Any canvas iOS exposes beyond the page (toolbar transitions,
+     rubber-banding) paints stage-black instead of white. */
+  background: var(--bg-deep);
 }
 
 html,
 body {
   height: 100%;
+  /* No rubber-band bounce — overscroll was exposing content strips
+     beyond fixed bars on iOS. */
+  overscroll-behavior-y: none;
 }
 
 select option {

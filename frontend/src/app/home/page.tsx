@@ -281,6 +281,8 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
             full-bleed; wide screens keep the cinematic left-side fade. */}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent sm:bg-gradient-to-r sm:from-background-deep/90 sm:via-background-deep/45 sm:to-transparent" />
         <div className="absolute inset-0 hidden bg-gradient-to-t from-background via-transparent to-background-deep/40 sm:block" />
+        {/* Status-bar legibility over bright poster art */}
+        <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-background-deep/60 to-transparent md:hidden" />
         <div className="projector-light absolute inset-0" />
       </div>
 

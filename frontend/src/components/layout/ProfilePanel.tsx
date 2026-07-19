@@ -64,36 +64,41 @@ export function ProfilePanel({ open, onClose }: ProfilePanelProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-background-deep/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 bg-background-deep sm:bg-background-deep/70 sm:backdrop-blur-sm"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
+      {/* iOS toolbar transitions can expose strips beyond the viewport —
+          keep those zones painted the same black. These sit on the overlay
+          (no overflow/transform) so nothing clips them. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-full h-40 bg-background-deep sm:hidden"
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-full h-40 bg-background-deep sm:hidden"
+      />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Миний бүртгэл"
         tabIndex={-1}
-        className="animate-slide-right fixed left-0 top-0 flex h-dvh w-full flex-col overflow-y-auto overscroll-contain bg-background-deep shadow-pop outline-none sm:max-w-sm sm:border-r sm:border-line sm:bg-surface"
+        className="animate-slide-right absolute inset-0 flex flex-col overflow-y-auto overscroll-contain bg-background-deep shadow-pop outline-none sm:right-auto sm:w-full sm:max-w-sm sm:border-r sm:border-line sm:bg-surface"
       >
-        {/* iOS viewport transitions can expose strips beyond the sheet —
-            keep those zones painted the same black. */}
-        <span
-          aria-hidden
-          className="pointer-events-none fixed inset-x-0 bottom-full h-40 bg-background-deep sm:hidden"
-        />
-        <span
-          aria-hidden
-          className="pointer-events-none fixed inset-x-0 top-full h-40 bg-background-deep sm:hidden"
-        />
         {/* Identity */}
-        <div className="projector-light relative border-b border-line px-6 pb-6 pt-5">
+        <div
+          className="projector-light relative border-b border-line px-6 pb-6 pt-5"
+          style={{ paddingTop: "calc(1.25rem + env(safe-area-inset-top))" }}
+        >
           <button
             type="button"
             onClick={onClose}
             aria-label="Хаах"
-            className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full border border-line bg-white/[.04] text-muted transition duration-200 hover:rotate-90 hover:border-line-strong hover:bg-white/10 hover:text-foreground"
+            className="absolute right-4 grid h-9 w-9 place-items-center rounded-full border border-line bg-white/[.04] text-muted transition duration-200 hover:rotate-90 hover:border-line-strong hover:bg-white/10 hover:text-foreground"
+            style={{ top: "calc(1rem + env(safe-area-inset-top))" }}
           >
             <IconX size={16} />
           </button>
@@ -254,7 +259,12 @@ export function ProfilePanel({ open, onClose }: ProfilePanelProps) {
         </div>
 
         {/* Logout */}
-        <div className="border-t border-line px-3 py-3">
+        <div
+          className="border-t border-line px-3 py-3"
+          style={{
+            paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))",
+          }}
+        >
           <button
             type="button"
             onClick={async () => {

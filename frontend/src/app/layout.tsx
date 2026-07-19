@@ -24,12 +24,12 @@ export const metadata: Metadata = {
     "Infinite дээр дуртай кино, цувралаа хаанаас ч, хэзээ ч тасралтгүй үзээрэй.",
 };
 
-// No viewport-fit=cover: iOS positions fixed overlays far more reliably
-// inside the safe layout viewport, and the matching theme-color keeps the
-// status-bar zone seamlessly dark anyway.
+// viewport-fit=cover makes env(safe-area-inset-*) real on iOS, so the
+// bottom dock and sheets can pad themselves clear of the home indicator.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   themeColor: "#05080f",
 };
 

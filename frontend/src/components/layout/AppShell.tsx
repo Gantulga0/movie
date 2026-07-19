@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
@@ -18,9 +18,14 @@ const SIDEBAR_KEY = "mnflix_sidebar_expanded";
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, loading } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+
+  // Home's hero runs under the status bar; every other page keeps its
+  // content clear of it.
+  const immersive = pathname === "/home";
 
   // Unauthenticated visitors are sent to login.
   useEffect(() => {
@@ -67,9 +72,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Phones have no top bar at all — content owns the whole screen;
           navigation lives in the solid bottom dock. */}
       <main
-        className={`pb-24 transition-[padding] duration-200 md:pb-0 ${
-          expanded ? "md:pl-60" : "md:pl-[72px]"
-        }`}
+        className={`pb-24 transition-[padding] duration-200 md:pb-0 md:pt-0 ${
+          immersive ? "" : "pt-[env(safe-area-inset-top)]"
+        } ${expanded ? "md:pl-60" : "md:pl-[72px]"}`}
       >
         <PageTransition>{children}</PageTransition>
       </main>
