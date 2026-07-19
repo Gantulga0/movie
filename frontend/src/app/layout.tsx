@@ -24,12 +24,12 @@ export const metadata: Metadata = {
     "Infinite дээр дуртай кино, цувралаа хаанаас ч, хэзээ ч тасралтгүй үзээрэй.",
 };
 
-// viewport-fit=cover lets the app paint edge-to-edge on notched phones;
-// safe-area insets then keep the fixed bars clear of the hardware.
+// No viewport-fit=cover: iOS positions fixed overlays far more reliably
+// inside the safe layout viewport, and the matching theme-color keeps the
+// status-bar zone seamlessly dark anyway.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  viewportFit: "cover",
   themeColor: "#05080f",
 };
 

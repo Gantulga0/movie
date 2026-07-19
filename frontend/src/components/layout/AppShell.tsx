@@ -26,7 +26,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Home is immersive on phones: the hero runs edge-to-edge under a
   // transparent gradient header instead of sitting below a solid bar.
+  // Once the page scrolls, the scrim solidifies so passing content
+  // never shows through the brand row.
   const immersive = pathname === "/home";
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 16);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   // Unauthenticated visitors are sent to login.
   useEffect(() => {
@@ -74,10 +83,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           the safe-area padding keeps it over the notch/status bar. On home
           it becomes a scrim so the hero artwork shows through. */}
       <header
-        className={`fixed inset-x-0 top-0 z-40 md:hidden ${
-          immersive
+        className={`fixed inset-x-0 top-0 z-40 transition-colors duration-300 md:hidden ${
+          immersive && !scrolled
             ? "bg-gradient-to-b from-background-deep/90 via-background-deep/40 to-transparent"
-            : "border-b border-line bg-background-deep/85 backdrop-blur-md"
+            : "border-b border-line bg-background-deep/90 backdrop-blur-md"
         }`}
         style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
