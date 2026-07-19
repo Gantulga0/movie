@@ -26,6 +26,15 @@ export function daysLeft(iso: string): number {
   return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
 }
 
+/** Share of the [startedAt, endsAt] window still ahead, clamped to 2–100. */
+export function remainingPercent(startedAt: string, endsAt: string): number {
+  const end = new Date(endsAt).getTime();
+  const start = new Date(startedAt).getTime();
+  if (end <= start) return 0;
+  const pct = Math.round(((end - Date.now()) / (end - start)) * 100);
+  return Math.min(100, Math.max(2, pct));
+}
+
 /** 1938 -> "32:18" , 7425 -> "2:03:45" — player-style position stamp. */
 export function formatTimestamp(seconds: number): string {
   const h = Math.floor(seconds / 3600);

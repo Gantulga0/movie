@@ -47,9 +47,32 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   token?: string | null;
+  /** Cache a successful token-less GET this long; also dedupes in-flight calls. */
+  cacheTtlMs?: number;
 }
 
+/** Short-lived cache for public GETs — repeat navigations render instantly. */
+const getCache = new Map<string, { at: number; promise: Promise<unknown> }>();
+
 async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { method = "GET", token, cacheTtlMs } = options;
+  const cacheable = Boolean(cacheTtlMs) && method === "GET" && !token;
+  if (cacheable) {
+    const hit = getCache.get(path);
+    if (hit && Date.now() - hit.at < (cacheTtlMs as number)) {
+      return hit.promise as Promise<T>;
+    }
+  }
+  const promise = doFetch<T>(path, options);
+  if (cacheable) {
+    getCache.set(path, { at: Date.now(), promise });
+    // Failures must not be served from the cache.
+    promise.catch(() => getCache.delete(path));
+  }
+  return promise;
+}
+
+async function doFetch<T>(path: string, options: RequestOptions): Promise<T> {
   const { method = "GET", body, token } = options;
 
   const headers: Record<string, string> = {};
@@ -151,16 +174,27 @@ export interface ContentListParams {
   limit?: number;
 }
 
+/** Public catalog data changes rarely — a minute of cache kills refetch flicker. */
+const CATALOG_TTL_MS = 60_000;
+
 export const contentApi = {
   list: (params: ContentListParams = {}) =>
-    apiFetch<Paged<Content>>(`/content${qs({ ...params })}`),
+    apiFetch<Paged<Content>>(`/content${qs({ ...params })}`, {
+      cacheTtlMs: CATALOG_TTL_MS,
+    }),
 
-  get: (idOrSlug: string) => apiFetch<ContentDetail>(`/content/${idOrSlug}`),
+  get: (idOrSlug: string) =>
+    apiFetch<ContentDetail>(`/content/${idOrSlug}`, {
+      cacheTtlMs: CATALOG_TTL_MS,
+    }),
 
-  genres: () => apiFetch<Genre[]>("/content/genres"),
+  genres: () =>
+    apiFetch<Genre[]>("/content/genres", { cacheTtlMs: CATALOG_TTL_MS }),
 
   related: (idOrSlug: string) =>
-    apiFetch<Content[]>(`/content/${idOrSlug}/related`),
+    apiFetch<Content[]>(`/content/${idOrSlug}/related`, {
+      cacheTtlMs: CATALOG_TTL_MS,
+    }),
 
   access: (id: string, token: string) =>
     apiFetch<ContentAccess>(`/content/${id}/access`, { token }),
@@ -173,7 +207,8 @@ export const contentApi = {
 };
 
 export const billingApi = {
-  plans: () => apiFetch<Plan[]>("/billing/plans"),
+  plans: () =>
+    apiFetch<Plan[]>("/billing/plans", { cacheTtlMs: CATALOG_TTL_MS }),
 
   me: (token: string) => apiFetch<MySubscription>("/billing/me", { token }),
 

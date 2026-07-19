@@ -6,6 +6,7 @@ import { ContentCard } from "@/components/ContentCard";
 import { ContentRow } from "@/components/ContentRow";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { IconSearch, IconX } from "@/components/ui/icons";
 import { contentApi } from "@/lib/api";
 import type { Content } from "@/lib/types";
@@ -93,9 +94,7 @@ function SearchContent() {
   return (
     <div className="py-8">
       <div className="px-5 sm:px-10">
-        <h1 className="display text-2xl font-semibold text-foreground sm:text-3xl">
-          Хайх
-        </h1>
+        <PageHeader eyebrow="Хайлт" title="Хайх" />
 
         {/* Search box */}
         <div className="relative mt-5 max-w-2xl">
@@ -112,7 +111,7 @@ function SearchContent() {
             }}
             placeholder="Кино, цуврал, жанр, он…"
             aria-label="Кино хайх"
-            className="no-focus-ring w-full rounded-2xl border border-line bg-surface-raised/80 py-3.5 pl-12 pr-12 text-base text-foreground placeholder-muted/70 outline-none transition focus:border-accent/40 focus:bg-surface-raised"
+            className="no-focus-ring w-full rounded-2xl border border-line bg-surface-raised/80 py-3.5 pl-12 pr-12 text-base text-foreground placeholder-muted/70 outline-none transition focus:border-accent/40 focus:bg-surface-raised focus:shadow-[0_0_28px_rgba(124,140,255,0.15)]"
           />
           {query ? (
             <button

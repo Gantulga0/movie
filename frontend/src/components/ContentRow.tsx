@@ -64,15 +64,23 @@ export function ContentRow({
   return (
     <section className="mt-9">
       <div className="mb-3 flex items-baseline justify-between px-5 sm:px-10">
-        <h2 className="display text-lg font-semibold text-foreground sm:text-xl">
+        <h2 className="display flex items-center gap-2.5 text-lg font-semibold text-foreground sm:text-xl">
+          <span
+            aria-hidden
+            className="h-4 w-[3px] rounded-full bg-gradient-to-b from-accent to-accent/15"
+          />
           {title}
         </h2>
         {viewAllHref ? (
           <Link
             href={viewAllHref}
-            className="text-xs font-semibold text-accent transition hover:text-accent-hover"
+            className="group/all inline-flex items-center gap-1 text-xs font-semibold text-accent transition hover:text-accent-hover"
           >
-            Бүгдийг харах →
+            Бүгдийг харах
+            <IconChevronRight
+              size={14}
+              className="transition-transform duration-200 group-hover/all:translate-x-0.5"
+            />
           </Link>
         ) : null}
       </div>

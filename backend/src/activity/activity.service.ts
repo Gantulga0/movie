@@ -11,6 +11,9 @@ const contentCard = {
     posterUrl: true,
     releaseYear: true,
     durationSec: true,
+    isRentable: true,
+    rentalPrice: true,
+    subscriptionIncluded: true,
   },
 };
 

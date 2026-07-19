@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { IconUpload } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/Toast";
 import { Field } from "@/components/Field";
@@ -95,9 +96,7 @@ function AccountContent() {
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-10 sm:px-10">
-      <h1 className="display text-2xl font-semibold text-foreground sm:text-3xl">
-        Миний бүртгэл
-      </h1>
+      <PageHeader eyebrow="Тохиргоо" title="Миний бүртгэл" />
 
       {/* Membership card */}
       <div className="ticket-notch mt-6 rounded-2xl border border-line bg-surface shadow-card">

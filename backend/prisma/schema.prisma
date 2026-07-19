@@ -1,5 +1,8 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Single-SQL JOIN loading — the remote (Supabase) DB makes every extra
+  // round trip cost ~150ms, so nested includes must not fan out.
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {

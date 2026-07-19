@@ -27,7 +27,7 @@ const SIZES: Record<Size, string> = {
 };
 
 const BASE =
-  "inline-flex items-center justify-center transition select-none disabled:cursor-not-allowed disabled:opacity-55";
+  "inline-flex items-center justify-center transition select-none active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-55";
 
 function classes(variant: Variant, size: Size, className: string) {
   return `${BASE} ${VARIANTS[variant]} ${SIZES[size]} ${className}`;

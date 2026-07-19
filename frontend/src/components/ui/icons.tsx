@@ -266,3 +266,43 @@ export const IconSparkle = (p: IconProps) => (
     <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" />
   </Base>
 );
+
+/** Question mark in a circle — FAQ / help. */
+export const IconHelp = (p: IconProps) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+    <path d="M12 17h.01" />
+  </Base>
+);
+
+/** Document with text lines — terms / policies. */
+export const IconFileText = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+    <path d="M14 2v6h6" />
+    <path d="M16 13H8M16 17H8M10 9H8" />
+  </Base>
+);
+
+/** Clapperboard — the movies section. */
+export const IconClapperboard = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z" />
+    <path d="m6.2 5.3 3.1 3.9M12.4 3.4l3.1 4" />
+    <path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+  </Base>
+);
+
+/** Screen with a play mark — the series section. */
+export const IconSeriesPlay = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="2" y="3" width="20" height="14" rx="2" />
+    <path d="M7 21h10" />
+    <path
+      d="M10 7.8v4.4c0 .4.45.65.8.43l3.5-2.2a.5.5 0 0 0 0-.85l-3.5-2.2a.5.5 0 0 0-.8.42Z"
+      fill="currentColor"
+      stroke="none"
+    />
+  </Base>
+);

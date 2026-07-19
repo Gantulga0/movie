@@ -83,10 +83,13 @@ export class ContentService {
     const page = query.page ?? 1;
     const limit = query.limit ?? DEFAULT_PAGE_SIZE;
 
-    const [items, total] = await this.prisma.$transaction([
+    // Pure reads run in parallel; the JOIN strategy keeps each one a
+    // single SQL statement against the remote database.
+    const [items, total] = await Promise.all([
       this.prisma.content.findMany({
         where,
         include: listInclude,
+        relationLoadStrategy: 'join',
         orderBy: SORT_ORDERINGS[query.sort ?? 'new'],
         skip: (page - 1) * limit,
         take: limit,
@@ -118,6 +121,7 @@ export class ContentService {
           : {}),
       },
       include: listInclude,
+      relationLoadStrategy: 'join',
       orderBy: { createdAt: 'desc' },
       take: RELATED_LIMIT,
     });
@@ -128,20 +132,19 @@ export class ContentService {
    * should offer. Always computed server-side; the client never decides.
    */
   async access(contentId: string, user: SafeUser) {
-    const content = await this.prisma.content.findFirst({
-      where: { id: contentId, status: ContentStatus.PUBLISHED },
-      select: {
-        id: true,
-        subscriptionIncluded: true,
-        isRentable: true,
-        rentalPrice: true,
-        rentalDurationHours: true,
-      },
-    });
-    if (!content) throw new NotFoundException('Контент олдсонгүй');
-
     const now = new Date();
-    const [subscription, rental] = await this.prisma.$transaction([
+    // All three lookups are independent — one parallel burst, not a chain.
+    const [content, subscription, rental] = await Promise.all([
+      this.prisma.content.findFirst({
+        where: { id: contentId, status: ContentStatus.PUBLISHED },
+        select: {
+          id: true,
+          subscriptionIncluded: true,
+          isRentable: true,
+          rentalPrice: true,
+          rentalDurationHours: true,
+        },
+      }),
       this.prisma.subscription.findFirst({
         where: {
           userId: user.id,
@@ -157,6 +160,7 @@ export class ContentService {
         select: { endsAt: true },
       }),
     ]);
+    if (!content) throw new NotFoundException('Контент олдсонгүй');
 
     const viaSubscription = Boolean(
       content.subscriptionIncluded && subscription,
@@ -178,38 +182,44 @@ export class ContentService {
 
   /** Detail view. Video asset URLs are withheld — those come from `watch`. */
   async get(idOrSlug: string, adminView = false) {
-    const content = await this.prisma.content.findFirst({
-      where: {
-        OR: [{ id: idOrSlug }, { slug: idOrSlug }],
-        ...(adminView ? {} : { status: ContentStatus.PUBLISHED }),
-      },
-      include: {
-        genres: { include: { genre: true } },
-        seasons: {
-          orderBy: { number: 'asc' },
-          include: {
-            episodes: {
-              orderBy: { number: 'asc' },
-              include: {
-                videoAssets: { select: { id: true, quality: true } },
+    const matcher = { OR: [{ id: idOrSlug }, { slug: idOrSlug }] };
+    // One JOIN-loaded content query and the rating aggregate, in parallel —
+    // the previous include fan-out plus a chained aggregate cost seconds
+    // against the remote database.
+    const [content, rating] = await Promise.all([
+      this.prisma.content.findFirst({
+        where: {
+          ...matcher,
+          ...(adminView ? {} : { status: ContentStatus.PUBLISHED }),
+        },
+        include: {
+          genres: { include: { genre: true } },
+          seasons: {
+            orderBy: { number: 'asc' },
+            include: {
+              episodes: {
+                orderBy: { number: 'asc' },
+                include: {
+                  videoAssets: { select: { id: true, quality: true } },
+                },
               },
             },
           },
+          // Which qualities exist is public; the URLs are not.
+          videoAssets: { select: { id: true, quality: true } },
+          subtitles: { select: { id: true, language: true, label: true } },
         },
-        // Which qualities exist is public; the URLs are not.
-        videoAssets: { select: { id: true, quality: true } },
-        subtitles: { select: { id: true, language: true, label: true } },
-      },
-    });
+        relationLoadStrategy: 'join',
+      }),
+      this.prisma.rating.aggregate({
+        where: { content: matcher },
+        _avg: { score: true },
+        _count: true,
+      }),
+    ]);
     if (!content) {
       throw new NotFoundException('Контент олдсонгүй');
     }
-
-    const rating = await this.prisma.rating.aggregate({
-      where: { contentId: content.id },
-      _avg: { score: true },
-      _count: true,
-    });
 
     return {
       ...content,

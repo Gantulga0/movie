@@ -7,6 +7,7 @@ import { PaymentModal } from "@/components/billing/PaymentModal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { IconCheck } from "@/components/ui/icons";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, billingApi } from "@/lib/api";
 import type { CheckoutResult, MySubscription, Plan } from "@/lib/types";
@@ -41,7 +42,10 @@ function PlansContent() {
 
   const refreshMine = useCallback(() => {
     if (!token) return;
-    billingApi.me(token).then(setMine).catch(() => undefined);
+    billingApi
+      .me(token)
+      .then(setMine)
+      .catch(() => undefined);
   }, [token]);
 
   useEffect(refreshMine, [refreshMine]);
@@ -62,23 +66,60 @@ function PlansContent() {
 
   const active = mine?.active ?? null;
 
+  // Per-month framing: everything is compared against the shortest plan.
+  const monthsOf = (p: Plan) => Math.max(1, Math.round(p.durationDay / 30));
+  const perMonthOf = (p: Plan) => Math.round(p.price / monthsOf(p));
+  const basePerMonth =
+    plans.length > 0
+      ? perMonthOf(
+          plans.reduce((a, b) => (a.durationDay <= b.durationDay ? a : b)),
+        )
+      : 0;
+  // "Best value" = the cheapest month; on a tie the longer plan wins.
+  const bestId =
+    plans.length > 1
+      ? plans.reduce((a, b) =>
+          perMonthOf(b) < perMonthOf(a) ||
+          (perMonthOf(b) === perMonthOf(a) && b.durationDay > a.durationDay)
+            ? b
+            : a,
+        ).id
+      : null;
+
   return (
-    <div className="mx-auto max-w-5xl px-5 py-10 sm:px-10">
-      <header className="text-center">
-        <h1 className="display text-3xl font-bold text-foreground sm:text-4xl">
+    <div className="relative mx-auto max-w-6xl px-5 py-12 sm:px-10">
+      {/* Stage light falling on the header */}
+      <div
+        aria-hidden
+        className="projector-light pointer-events-none absolute inset-x-0 -top-12 h-72"
+      />
+
+      <header className="relative text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/infinity.png"
+          alt=""
+          className="mx-auto h-14 w-auto drop-shadow-[0_0_28px_rgba(124,140,255,0.6)]"
+        />
+        <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.35em] text-accent">
+          Infinite Pass
+        </p>
+        <h1 className="display mt-2 text-4xl font-bold text-foreground sm:text-5xl">
           Эрх сунгах
         </h1>
-        <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted">
-          Нэг багц — бүх кино, цуврал, анимэ. Урт хугацаа сонгох тусам нэг
-          сарын үнэ хямдарна. Шинэ хугацаа одоогийн эрхийн дээр нэмэгдэнэ.
-        </p>
       </header>
 
-      {/* Current subscription state */}
+      {/* Current membership strip */}
       {active ? (
-        <div className="mx-auto mt-8 flex max-w-lg items-center justify-between gap-4 rounded-2xl border border-accent/25 bg-accent/[.08] px-5 py-4">
-          <div>
-            <p className="text-sm font-bold text-foreground">
+        <div className="mx-auto mt-9 flex max-w-xl items-center gap-4 rounded-2xl border border-accent/25 bg-accent/[.07] px-5 py-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/infinity.png"
+            alt=""
+            className="h-8 w-auto shrink-0 opacity-90"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold text-foreground">
               Идэвхтэй: {active.plan.name}
             </p>
             <p className="mt-0.5 text-xs text-muted">
@@ -93,89 +134,45 @@ function PlansContent() {
       ) : null}
 
       {error ? (
-        <div className="mx-auto mt-6 max-w-lg rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+        <div className="mx-auto mt-6 max-w-xl rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
           {error}
         </div>
       ) : null}
 
-      {/* Ticket-stub plan cards */}
+      {/* Plan cards */}
       {plansLoading ? (
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-11 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-72 rounded-2xl" />
+            <Skeleton key={i} className="h-80 rounded-3xl" />
           ))}
         </div>
       ) : (
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {plans.map((plan, i) => {
-            const months = Math.max(1, Math.round(plan.durationDay / 30));
-            const perMonth = Math.round(plan.price / months);
-            const isBest = i === plans.length - 1;
-            return (
-              <div
-                key={plan.id}
-                className={`ticket-notch relative flex flex-col rounded-2xl border bg-surface shadow-card transition hover:-translate-y-1 ${
-                  isBest ? "border-accent/50" : "border-line"
-                }`}
-              >
-                {isBest ? (
-                  <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-strong px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
-                    Хамгийн ашигтай
-                  </span>
-                ) : null}
-
-                {/* Stub */}
-                <div className="px-6 pb-5 pt-7 text-center">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted">
-                    Infinite тасалбар
-                  </p>
-                  <p className="display mt-2 text-2xl font-semibold text-foreground">
-                    {plan.name}
-                  </p>
-                  <p className="mt-4 text-3xl font-extrabold text-foreground">
-                    {formatMnt(plan.price)}
-                  </p>
-                  {months > 1 ? (
-                    <p className="mt-1 text-xs text-muted">
-                      сард {formatMnt(perMonth)}
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-xs text-muted">суурь үнэ</p>
-                  )}
-                </div>
-
-                <div className="ticket-perforation mx-4 h-px" aria-hidden />
-
-                {/* Body */}
-                <div className="flex flex-1 flex-col px-6 pb-6 pt-5">
-                  <ul className="space-y-2 text-xs text-muted">
-                    <li>✓ Бүх кино, цуврал</li>
-                    <li>✓ HD чанар</li>
-                    <li>✓ {plan.durationDay} хоногийн эрх</li>
-                  </ul>
-                  <Button
-                    variant={isBest ? "accent" : "outline"}
-                    className="mt-5 w-full"
-                    disabled={paying !== null}
-                    loading={paying === plan.id}
-                    onClick={() => startCheckout(plan)}
-                  >
-                    {active ? "Сунгах" : "Сонгох"}
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
+        <div className="mt-11 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
+          {plans.map((plan, i) => (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              months={monthsOf(plan)}
+              perMonth={perMonthOf(plan)}
+              basePerMonth={basePerMonth}
+              isBest={plan.id === bestId}
+              renewing={Boolean(active)}
+              busy={paying !== null}
+              loading={paying === plan.id}
+              delayMs={i * 70}
+              onSelect={() => startCheckout(plan)}
+            />
+          ))}
         </div>
       )}
 
       {/* Subscription history */}
       {mine && mine.history.length > 0 ? (
-        <section className="mt-14">
+        <section className="mt-16">
           <h2 className="display text-lg font-semibold text-foreground">
             Төлбөрийн түүх
           </h2>
-          <div className="mt-4 overflow-x-auto rounded-xl border border-line">
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-line bg-surface/60">
             <table className="w-full min-w-[480px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs uppercase tracking-wider text-muted">
@@ -187,7 +184,10 @@ function PlansContent() {
               </thead>
               <tbody>
                 {mine.history.map((sub) => (
-                  <tr key={sub.id} className="border-b border-line/50">
+                  <tr
+                    key={sub.id}
+                    className="border-b border-line/50 last:border-0"
+                  >
                     <td className="px-4 py-3 font-semibold text-foreground">
                       {sub.plan.name}
                     </td>
@@ -237,6 +237,117 @@ function PlansContent() {
         />
       ) : null}
     </div>
+  );
+}
+
+function PlanCard({
+  plan,
+  months,
+  perMonth,
+  basePerMonth,
+  isBest,
+  renewing,
+  busy,
+  loading,
+  delayMs,
+  onSelect,
+}: {
+  plan: Plan;
+  months: number;
+  perMonth: number;
+  basePerMonth: number;
+  isBest: boolean;
+  renewing: boolean;
+  busy: boolean;
+  loading: boolean;
+  delayMs: number;
+  onSelect: () => void;
+}) {
+  const savings =
+    basePerMonth > 0 ? Math.round((1 - perMonth / basePerMonth) * 100) : 0;
+
+  const inner = (
+    <div
+      className={`flex h-full flex-col p-6 ${
+        isBest ? "rounded-[calc(1.5rem-1px)] bg-surface" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <p className="display text-xl font-semibold text-foreground">
+          {plan.name}
+        </p>
+        {savings >= 5 ? (
+          <span className="rounded-full bg-teal/15 px-2 py-0.5 text-[11px] font-bold tabular-nums text-teal">
+            −{savings}%
+          </span>
+        ) : null}
+      </div>
+
+      <p className="mt-4 flex items-baseline gap-1">
+        <span className="display text-4xl font-bold tabular-nums text-foreground">
+          {formatMnt(perMonth)}
+        </span>
+        <span className="text-sm font-medium text-muted">/ сар</span>
+      </p>
+      <p className="mt-1 text-xs tabular-nums text-muted">
+        {months > 1
+          ? `Нийт ${formatMnt(plan.price)} • ${plan.durationDay} хоног`
+          : `${plan.durationDay} хоногийн эрх`}
+      </p>
+
+      <div className="my-5 h-px bg-line" aria-hidden />
+
+      <ul className="space-y-2.5 text-[13px] text-foreground/80">
+        <PlanFeature>Бүх кино, цуврал, анимэ</PlanFeature>
+        <PlanFeature>HD чанараар үзэх</PlanFeature>
+        <PlanFeature>{plan.maxDevices} төхөөрөмж дээр нэвтрэх</PlanFeature>
+      </ul>
+
+      <div className="mt-auto pt-5" aria-hidden />
+      <Button
+        variant={isBest ? "accent" : "outline"}
+        size="lg"
+        className="w-full"
+        disabled={busy}
+        loading={loading}
+        onClick={onSelect}
+      >
+        {renewing ? "Сунгах" : "Сонгох"}
+      </Button>
+    </div>
+  );
+
+  return (
+    <div
+      className="animate-rise relative"
+      style={{ animationDelay: `${delayMs}ms`, animationFillMode: "backwards" }}
+    >
+      {isBest ? (
+        <>
+          <span className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-accent-strong px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white shadow-[0_2px_16px_rgba(93,110,245,0.5)]">
+            Хамгийн ашигтай
+          </span>
+          <div className="h-full rounded-3xl bg-gradient-to-b from-accent via-accent/35 to-accent/10 p-px shadow-[0_8px_40px_rgba(93,110,245,0.25)] transition duration-200 hover:-translate-y-1">
+            {inner}
+          </div>
+        </>
+      ) : (
+        <div className="h-full rounded-3xl border border-line bg-surface/80 transition duration-200 hover:-translate-y-1 hover:border-line-strong">
+          {inner}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanFeature({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="flex items-start gap-2">
+      <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-accent/15 text-accent">
+        <IconCheck size={11} />
+      </span>
+      {children}
+    </li>
   );
 }
 

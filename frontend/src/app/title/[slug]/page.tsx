@@ -7,6 +7,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { ContentCard } from "@/components/ContentCard";
 import { ContentRow } from "@/components/ContentRow";
 import { PaymentModal } from "@/components/billing/PaymentModal";
+import { AccessOptions } from "@/components/billing/AccessOptions";
 import { Badge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -17,7 +18,6 @@ import {
   IconClock,
   IconPlay,
   IconPlus,
-  IconTicket,
 } from "@/components/ui/icons";
 import { useAuth } from "@/lib/auth-context";
 import { activityApi, billingApi, contentApi } from "@/lib/api";
@@ -27,11 +27,11 @@ import type {
   ContentDetail,
   HistoryItem,
   RentCheckoutResult,
+  WatchlistItem,
 } from "@/lib/types";
 import {
   formatDuration,
   formatHours,
-  formatMnt,
   formatRemaining,
   watchedPercent,
 } from "@/lib/format";
@@ -72,6 +72,21 @@ function TitleContent() {
       .catch(() => setRelated([]));
   }, [slug]);
 
+  // Personal state loads in parallel with the content; only the
+  // entitlement check waits for the resolved content id.
+  const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
+  useEffect(() => {
+    if (!token) return;
+    activityApi
+      .history(token)
+      .then(setHistory)
+      .catch(() => setHistory([]));
+    activityApi
+      .watchlist(token)
+      .then(setWatchlistItems)
+      .catch(() => undefined);
+  }, [token]);
+
   const contentId = content?.id ?? null;
   useEffect(() => {
     if (!token || !contentId) return;
@@ -79,15 +94,11 @@ function TitleContent() {
       .access(contentId, token)
       .then(setAccess)
       .catch(() => setAccess(null));
-    activityApi
-      .history(token)
-      .then(setHistory)
-      .catch(() => setHistory([]));
-    activityApi
-      .watchlist(token)
-      .then((items) => setInList(items.some((i) => i.content.id === contentId)))
-      .catch(() => undefined);
   }, [token, contentId]);
+
+  useEffect(() => {
+    setInList(watchlistItems.some((i) => i.content.id === contentId));
+  }, [watchlistItems, contentId]);
 
   const refreshAccess = useCallback(() => {
     if (!token || !contentId) return;
@@ -177,10 +188,7 @@ function TitleContent() {
       : `/watch/${content.id}`;
 
   const canWatch = access?.canWatch ?? user?.role === "ADMIN";
-  const showRent = Boolean(
-    content.isRentable && access && !access.viaRental && !canWatch,
-  );
-  const showPlans = Boolean(content.subscriptionIncluded && access && !canWatch);
+  const showAccessOptions = Boolean(access && !canWatch);
 
   return (
     <div className="pb-16">
@@ -324,30 +332,21 @@ function TitleContent() {
               </div>
             ) : null}
 
+            {/* Paywall: ticket vs monthly pass */}
+            {showAccessOptions && access ? (
+              <AccessOptions
+                access={access}
+                renting={renting}
+                onRent={startRent}
+              />
+            ) : null}
+
             {/* Actions */}
             <div className="mt-7 flex flex-wrap items-center gap-2.5">
               {canWatch ? (
                 <ButtonLink href={watchHref} variant="primary" size="lg">
                   <IconPlay size={18} />
                   {resume ? "Үргэлжлүүлэх" : "Үзэх"}
-                </ButtonLink>
-              ) : null}
-              {showRent && content.rentalPrice ? (
-                <Button
-                  variant="accent"
-                  size="lg"
-                  loading={renting}
-                  onClick={startRent}
-                  className="bg-gold text-background-deep shadow-[0_4px_20px_rgba(230,185,94,0.25)] hover:bg-gold/90"
-                >
-                  <IconTicket size={18} />
-                  Түрээслэх — {formatMnt(content.rentalPrice)} /{" "}
-                  {formatHours(content.rentalDurationHours)}
-                </Button>
-              ) : null}
-              {showPlans ? (
-                <ButtonLink href="/plans" variant="accent" size="lg">
-                  Багц идэвхжүүлэх
                 </ButtonLink>
               ) : null}
               {content.trailerUrl ? (

@@ -334,7 +334,7 @@ export function ContentForm({
 
         {/* Genres */}
         <div className="sm:col-span-2">
-          <p className={label}>Жанр</p>
+          <p className={label}>Ангилал</p>
           <div className="flex flex-wrap gap-2">
             {allGenres.map((g) => {
               const on = values.genres.includes(g.name);

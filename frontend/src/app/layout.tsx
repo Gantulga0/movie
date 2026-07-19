@@ -3,6 +3,7 @@ import { Inter, Sofia_Sans_Condensed } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { ToastProvider } from "@/components/ui/Toast";
+import { CursorGlow } from "@/components/CursorGlow";
 
 // Inter carries all body text — full Cyrillic coverage for Mongolian.
 const inter = Inter({
@@ -18,9 +19,9 @@ const display = Sofia_Sans_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: "Infinite — Хязгааргүй кино, цуврал, анимэ",
+  title: "Infinite Movie",
   description:
-    "Infinite дээр дуртай кино, цуврал, анимэгээ хаанаас ч, хэзээ ч тасралтгүй үзээрэй.",
+    "Infinite дээр дуртай кино, цувралаа хаанаас ч, хэзээ ч тасралтгүй үзээрэй.",
 };
 
 export default function RootLayout({
@@ -37,6 +38,7 @@ export default function RootLayout({
         <AuthProvider>
           <ToastProvider>{children}</ToastProvider>
         </AuthProvider>
+        <CursorGlow />
       </body>
     </html>
   );

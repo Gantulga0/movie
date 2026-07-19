@@ -8,6 +8,8 @@ import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
 import { ProfilePanel } from "./ProfilePanel";
 import { DetailsModalProvider } from "@/components/details/DetailsModalProvider";
+import { PageTransition } from "./PageTransition";
+import { SubscriptionProvider } from "@/lib/subscription-context";
 
 const SIDEBAR_KEY = "mnflix_sidebar_expanded";
 
@@ -55,6 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <SubscriptionProvider>
     <DetailsModalProvider>
       <div className="min-h-screen bg-background">
       {/* useSearchParams inside Sidebar needs a Suspense boundary. */}
@@ -63,14 +66,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </Suspense>
 
       {/* Mobile top bar — brand only; navigation lives at the bottom. */}
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-background-deep/85 px-5 backdrop-blur-md md:hidden">
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-background-deep/85 px-5 backdrop-blur-md md:hidden">
         <Link
           href="/home"
-          className="display select-none text-xl font-bold tracking-tight"
+          className="flex select-none items-center gap-2.5"
           aria-label="Infinite нүүр хуудас"
         >
-          <span className="text-accent">∞</span>{" "}
-          <span className="text-foreground">INFINITE</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/infinity.png"
+            alt=""
+            className="h-8 w-auto drop-shadow-[0_0_14px_rgba(124,140,255,0.55)]"
+          />
+          <span className="display text-2xl font-bold tracking-tight text-foreground">
+            INFINITE
+          </span>
         </Link>
       </header>
 
@@ -79,12 +89,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           expanded ? "md:pl-60" : "md:pl-[72px]"
         }`}
       >
-        {children}
+        <PageTransition>{children}</PageTransition>
       </main>
 
       <MobileNav onProfile={openProfile} />
       <ProfilePanel open={profileOpen} onClose={closeProfile} />
       </div>
     </DetailsModalProvider>
+    </SubscriptionProvider>
   );
 }

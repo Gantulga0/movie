@@ -6,6 +6,7 @@ import { useDetails } from "@/components/details/DetailsModalProvider";
 import { Badge } from "@/components/ui/Badge";
 import { ButtonLink } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { IconClock, IconPlay, IconTicket } from "@/components/ui/icons";
 import { useAuth } from "@/lib/auth-context";
@@ -57,13 +58,7 @@ function RentalsContent() {
 
   return (
     <div className="px-5 py-8 sm:px-10">
-      <h1 className="display text-2xl font-semibold text-foreground sm:text-3xl">
-        Миний түрээс
-      </h1>
-      <p className="mt-1 text-sm text-muted">
-        Түрээсэлсэн кино тус бүр өөрийн хугацаатай — хугацаа дуустал хүссэн
-        хэмжээгээрээ үзэж болно.
-      </p>
+      <PageHeader eyebrow="Миний сан" title="Миний түрээс" />
 
       {loading ? (
         <div className="mt-6 space-y-3">

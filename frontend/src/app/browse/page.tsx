@@ -7,6 +7,7 @@ import { ContentCard } from "@/components/ContentCard";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { IconCompass, IconX } from "@/components/ui/icons";
 import { contentApi, type ContentListParams } from "@/lib/api";
@@ -155,10 +156,19 @@ function BrowseContent() {
 
   return (
     <div className="px-5 py-8 sm:px-10">
-      <h1 className="sr-only">Ангилал</h1>
+      <PageHeader
+        eyebrow={
+          type === "MOVIE"
+            ? "Бүх кино"
+            : type === "SERIES"
+              ? "Бүх цуврал"
+              : "Бүх контент"
+        }
+        title="Ангилал"
+      />
 
       {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="mt-7 flex flex-wrap items-end gap-3">
         {/* Content type segmented control */}
         <div>
           <span className="mb-1.5 block text-[13px] font-bold text-foreground">
@@ -192,13 +202,13 @@ function BrowseContent() {
         </div>
 
         <Select
-          label="Жанр"
+          label="Ангилал"
           value={genre ?? ""}
           onChange={(v) => setParam("genre", v || null)}
           searchable
-          searchPlaceholder="Жанр хайх"
+          searchPlaceholder="Ангилал хайх"
           options={[
-            { value: "", label: "Бүх жанр" },
+            { value: "", label: "Бүх ангилал" },
             ...genres.map((g) => ({ value: g.slug, label: g.name })),
           ]}
           className="w-44"

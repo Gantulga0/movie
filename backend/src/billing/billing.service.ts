@@ -28,6 +28,9 @@ const rentalContentSelect = {
     posterUrl: true,
     releaseYear: true,
     durationSec: true,
+    isRentable: true,
+    rentalPrice: true,
+    subscriptionIncluded: true,
   },
 } satisfies { select: Prisma.ContentSelect };
 
@@ -53,17 +56,23 @@ export class BillingService {
   /** The caller's current access state, shown on the account/plans screens. */
   async mySubscription(userId: string) {
     const now = new Date();
-    const active = await this.prisma.subscription.findFirst({
-      where: { userId, status: SubscriptionStatus.ACTIVE, endsAt: { gt: now } },
-      orderBy: { endsAt: 'desc' },
-      include: { plan: true },
-    });
-    const history = await this.prisma.subscription.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      include: { plan: true },
-      take: 20,
-    });
+    const [active, history] = await Promise.all([
+      this.prisma.subscription.findFirst({
+        where: {
+          userId,
+          status: SubscriptionStatus.ACTIVE,
+          endsAt: { gt: now },
+        },
+        orderBy: { endsAt: 'desc' },
+        include: { plan: true },
+      }),
+      this.prisma.subscription.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        include: { plan: true },
+        take: 20,
+      }),
+    ]);
     return { active, history };
   }
 

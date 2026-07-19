@@ -10,6 +10,7 @@ import type {
   ContentDetail,
   HistoryItem,
   RentCheckoutResult,
+  WatchlistItem,
 } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
@@ -17,6 +18,7 @@ import { ButtonLink, Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
 import { PaymentModal } from "@/components/billing/PaymentModal";
+import { AccessOptions } from "@/components/billing/AccessOptions";
 import { useDetails } from "./DetailsModalProvider";
 import {
   IconCheck,
@@ -24,13 +26,10 @@ import {
   IconInfo,
   IconPlay,
   IconPlus,
-  IconShare,
-  IconTicket,
 } from "@/components/ui/icons";
 import {
   formatDuration,
   formatHours,
-  formatMnt,
   formatRemaining,
   formatTimestamp,
   watchedPercent,
@@ -66,7 +65,6 @@ export function DetailsModal({
   const [related, setRelated] = useState<Content[]>([]);
   const [inList, setInList] = useState(false);
   const [trailerOpen, setTrailerOpen] = useState(false);
-  const [shared, setShared] = useState(false);
   const [renting, setRenting] = useState(false);
   const [rentCheckout, setRentCheckout] = useState<RentCheckoutResult | null>(null);
   const [rentError, setRentError] = useState("");
@@ -78,7 +76,6 @@ export function DetailsModal({
     setAccess(null);
     setRelated([]);
     setTrailerOpen(initialTrailer);
-    setShared(false);
     setRentError("");
 
     contentApi
@@ -91,7 +88,22 @@ export function DetailsModal({
       .catch(() => setRelated([]));
   }, [slug, initialTrailer]);
 
-  // Entitlement + personal state need the resolved content id.
+  // Personal state doesn't need the content id — it loads alongside the
+  // content itself instead of waiting behind it.
+  const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
+  useEffect(() => {
+    if (!token) return;
+    activityApi
+      .history(token)
+      .then(setHistory)
+      .catch(() => setHistory([]));
+    activityApi
+      .watchlist(token)
+      .then(setWatchlistItems)
+      .catch(() => undefined);
+  }, [token]);
+
+  // Only the entitlement check truly needs the resolved content id.
   const contentId = content?.id ?? null;
   useEffect(() => {
     if (!token || !contentId) return;
@@ -99,15 +111,11 @@ export function DetailsModal({
       .access(contentId, token)
       .then(setAccess)
       .catch(() => setAccess(null));
-    activityApi
-      .history(token)
-      .then(setHistory)
-      .catch(() => setHistory([]));
-    activityApi
-      .watchlist(token)
-      .then((items) => setInList(items.some((i) => i.content.id === contentId)))
-      .catch(() => undefined);
   }, [token, contentId]);
+
+  useEffect(() => {
+    setInList(watchlistItems.some((i) => i.content.id === contentId));
+  }, [watchlistItems, contentId]);
 
   const refreshAccess = useCallback(() => {
     if (!token || !contentId) return;
@@ -131,22 +139,6 @@ export function DetailsModal({
     } catch {
       setInList((v) => !v);
       toast.error("Жагсаалт шинэчлэхэд алдаа гарлаа.");
-    }
-  }
-
-  async function share() {
-    if (!content) return;
-    const url = `${window.location.origin}/title/${content.slug}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: content.title, url });
-      } else {
-        await navigator.clipboard.writeText(url);
-        setShared(true);
-        setTimeout(() => setShared(false), 2000);
-      }
-    } catch {
-      // User dismissed the share sheet — nothing to do.
     }
   }
 
@@ -192,12 +184,7 @@ export function DetailsModal({
 
   // Access decisions come from the backend; admins can always preview.
   const canWatch = access?.canWatch ?? user?.role === "ADMIN";
-  const showRent = Boolean(
-    content?.isRentable && access && !access.viaRental && !canWatch,
-  );
-  const showPlans = Boolean(
-    content?.subscriptionIncluded && access && !canWatch,
-  );
+  const showAccessOptions = Boolean(access && !canWatch);
 
   return (
     <>
@@ -333,6 +320,15 @@ export function DetailsModal({
                 </div>
               ) : null}
 
+              {/* Paywall: ticket vs monthly pass */}
+              {showAccessOptions && access ? (
+                <AccessOptions
+                  access={access}
+                  renting={renting}
+                  onRent={startRent}
+                />
+              ) : null}
+
               {/* Actions */}
               <div className="mt-5 flex flex-wrap items-center gap-2.5">
                 {canWatch ? (
@@ -345,25 +341,6 @@ export function DetailsModal({
                   <span className="text-xs text-muted">
                     {formatTimestamp(resume.progressSec)} хүртэл үзсэн
                   </span>
-                ) : null}
-
-                {showRent && content.rentalPrice ? (
-                  <Button
-                    variant="accent"
-                    size="lg"
-                    loading={renting}
-                    onClick={startRent}
-                    className="bg-gold text-background-deep shadow-[0_4px_20px_rgba(230,185,94,0.25)] hover:bg-gold/90"
-                  >
-                    <IconTicket size={18} />
-                    Түрээслэх — {formatMnt(content.rentalPrice)} /{" "}
-                    {formatHours(content.rentalDurationHours)}
-                  </Button>
-                ) : null}
-                {showPlans ? (
-                  <ButtonLink href="/plans" variant="accent" size="lg">
-                    Багц идэвхжүүлэх
-                  </ButtonLink>
                 ) : null}
 
                 {content.trailerUrl ? (
@@ -386,11 +363,6 @@ export function DetailsModal({
                 >
                   {inList ? <IconCheck size={18} /> : <IconPlus size={18} />}
                   {inList ? "Жагсаалтад байгаа" : "Жагсаалт"}
-                </Button>
-
-                <Button variant="ghost" size="lg" onClick={share}>
-                  <IconShare size={18} />
-                  {shared ? "Хуулагдлаа" : "Хуваалцах"}
                 </Button>
               </div>
 

@@ -41,7 +41,7 @@ export function MobileNav({ onProfile }: { onProfile: () => void }) {
                 active ? "text-accent" : "text-muted"
               }`}
             >
-              <Icon size={21} />
+              <Icon size={21} className="icon-live" />
               {item.label}
             </Link>
           );

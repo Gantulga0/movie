@@ -251,6 +251,10 @@ export interface ContentCardData {
   posterUrl: string | null;
   releaseYear: number | null;
   durationSec: number | null;
+  /** Rental info for the poster price tag; absent on older payloads. */
+  isRentable?: boolean;
+  rentalPrice?: number | null;
+  subscriptionIncluded?: boolean;
 }
 
 export interface AdminStats {

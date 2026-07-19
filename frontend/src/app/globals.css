@@ -100,6 +100,35 @@ body::after {
   letter-spacing: 0.015em;
 }
 
+/* ------------------------------------------------------------- live icons */
+
+/* Animated glyphs: hovering the control (or landing on the active nav
+   item) redraws the icon's strokes and gives it a springy pop — the
+   Flaticon animated-icon feel, in pure CSS. */
+svg.icon-live {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+a:hover svg.icon-live,
+button:hover svg.icon-live {
+  transform: scale(1.15) rotate(-5deg);
+}
+
+@keyframes mnflix-icon-draw {
+  from {
+    stroke-dashoffset: 130;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+a:hover svg.icon-live :is(path, circle, rect),
+button:hover svg.icon-live :is(path, circle, rect),
+a[aria-current="page"] svg.icon-live :is(path, circle, rect) {
+  stroke-dasharray: 130;
+  animation: mnflix-icon-draw 0.6s ease-out;
+}
+
 /* Toast alerts slide up as they arrive. */
 @keyframes toast-enter {
   from {
@@ -118,6 +147,49 @@ body::after {
   .toast-enter {
     animation: none;
   }
+}
+
+/* ------------------------------------------------------------------ cursor */
+
+/* Custom pointer set: an ivory arrow rimmed in indigo; interactive
+   targets flip it to a filled-indigo arrow. Native cursor stays as a
+   fallback keyword everywhere. */
+:root {
+  --cursor-arrow: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24"><path d="M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z" fill="%23f2efe8" stroke="%235d6ef5" stroke-width="1.5" stroke-linejoin="round"/></svg>')
+    3 3;
+  --cursor-hand: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24"><path d="M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z" fill="%237c8cff" stroke="%23f2efe8" stroke-width="1.5" stroke-linejoin="round"/></svg>')
+    3 3;
+}
+
+body {
+  cursor: var(--cursor-arrow), default;
+  /* UI chrome never turns into an I-beam; real inputs re-enable below. */
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  user-select: text;
+  cursor: text;
+}
+
+/* Tailwind 4 leaves buttons on the platform default arrow — every
+   interactive control in this app should read as clickable. */
+a,
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+label[for],
+select:not(:disabled),
+summary,
+.cursor-pointer {
+  cursor: var(--cursor-hand), pointer;
+}
+
+/* Text selection glows in the projector's indigo. */
+::selection {
+  background: rgba(124, 140, 255, 0.35);
+  color: #f6f4ee;
 }
 
 /* Visible keyboard focus everywhere; mouse clicks stay quiet.
@@ -220,6 +292,38 @@ body::after {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+/* Route change: the new page rises into the light. */
+@keyframes mnflix-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.page-enter {
+  animation: mnflix-page-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Sidebar labels slide in as the rail expands. */
+@keyframes mnflix-sidebar-label {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.sidebar-label {
+  animation: mnflix-sidebar-label 0.25s ease-out both;
 }
 
 @keyframes mnflix-shimmer {
@@ -340,7 +444,14 @@ body::after {
   .animate-slide-right,
   .animate-dropdown,
   .animate-drift,
+  .page-enter,
+  .sidebar-label,
   .skeleton {
+    animation: none;
+  }
+  a:hover svg.icon-live :is(path, circle, rect),
+  button:hover svg.icon-live :is(path, circle, rect),
+  a[aria-current="page"] svg.icon-live :is(path, circle, rect) {
     animation: none;
   }
   * {

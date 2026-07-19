@@ -7,6 +7,7 @@ import { ContinueWatchingCard } from "@/components/ContinueWatchingCard";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ButtonLink } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { IconBookmark, IconX } from "@/components/ui/icons";
 import { useAuth } from "@/lib/auth-context";
 import { activityApi } from "@/lib/api";
@@ -68,9 +69,7 @@ function MyListContent() {
 
   return (
     <div className="px-5 py-8 sm:px-10">
-      <h1 className="display text-2xl font-semibold text-foreground sm:text-3xl">
-        Миний жагсаалт
-      </h1>
+      <PageHeader eyebrow="Миний сан" title="Миний жагсаалт" />
 
       {loading ? (
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
