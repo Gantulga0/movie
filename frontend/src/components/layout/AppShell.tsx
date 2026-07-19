@@ -63,7 +63,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <SubscriptionProvider>
     <DetailsModalProvider>
-      <div className="min-h-screen bg-background">
+      {/* The app owns exactly one viewport-sized box and scrolls inside it.
+          The document itself never scrolls, so iOS Safari's toolbar never
+          collapses and fixed bars can never lag or expose content strips. */}
+      <div className="h-dvh overflow-hidden bg-background">
       {/* useSearchParams inside Sidebar needs a Suspense boundary. */}
       <Suspense fallback={null}>
         <Sidebar expanded={expanded} onToggle={toggle} onProfile={openProfile} />
@@ -71,13 +74,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Phones have no top bar at all — content owns the whole screen;
           navigation lives in the solid bottom dock. */}
-      <main
-        className={`pb-24 transition-[padding] duration-200 md:pb-0 md:pt-0 ${
-          immersive ? "" : "pt-[env(safe-area-inset-top)]"
-        } ${expanded ? "md:pl-60" : "md:pl-[72px]"}`}
-      >
-        <PageTransition>{children}</PageTransition>
-      </main>
+      <div className="h-full overflow-y-auto overscroll-contain">
+        <main
+          className={`pb-24 transition-[padding] duration-200 md:pb-0 md:pt-0 ${
+            immersive ? "" : "pt-[env(safe-area-inset-top)]"
+          } ${expanded ? "md:pl-60" : "md:pl-[72px]"}`}
+        >
+          <PageTransition>{children}</PageTransition>
+        </main>
+      </div>
 
       <MobileNav onProfile={openProfile} />
       <ProfilePanel open={profileOpen} onClose={closeProfile} />
