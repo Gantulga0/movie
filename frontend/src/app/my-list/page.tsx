@@ -50,7 +50,8 @@ function MyListContent() {
   const removeFromContinue = useCallback(
     (contentId: string) => {
       setHistory((rows) => rows.filter((r) => r.content.id !== contentId));
-      if (token) activityApi.removeHistory(token, contentId).catch(() => undefined);
+      if (token)
+        activityApi.removeHistory(token, contentId).catch(() => undefined);
     },
     [token],
   );
@@ -112,7 +113,7 @@ function MyListContent() {
       {continueWatching.length > 0 ? (
         <section className="mt-12">
           <h2 className="display text-xl font-semibold text-foreground">
-            Үзсээр байгаа
+            Үргэлжлүүлэх
           </h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {continueWatching.map((item) => (

@@ -8,12 +8,7 @@ import { ContinueWatchingCard } from "@/components/ContinueWatchingCard";
 import { useDetails } from "@/components/details/DetailsModalProvider";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
-import {
-  IconCheck,
-  IconInfo,
-  IconPlay,
-  IconPlus,
-} from "@/components/ui/icons";
+import { IconCheck, IconInfo, IconPlay, IconPlus } from "@/components/ui/icons";
 import { useAuth } from "@/lib/auth-context";
 import { activityApi, contentApi } from "@/lib/api";
 import type { Content, Genre, HistoryItem } from "@/lib/types";
@@ -40,7 +35,9 @@ function HomeContent() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [newest, setNewest] = useState<Content[]>([]);
   const [newestLoading, setNewestLoading] = useState(true);
-  const [genreRows, setGenreRows] = useState<Array<{ genre: Genre; items: Content[] }>>([]);
+  const [genreRows, setGenreRows] = useState<
+    Array<{ genre: Genre; items: Content[] }>
+  >([]);
   const [genresLoading, setGenresLoading] = useState(true);
 
   useEffect(() => {
@@ -86,7 +83,8 @@ function HomeContent() {
   const removeFromContinue = useCallback(
     (contentId: string) => {
       setHistory((rows) => rows.filter((r) => r.content.id !== contentId));
-      if (token) activityApi.removeHistory(token, contentId).catch(() => undefined);
+      if (token)
+        activityApi.removeHistory(token, contentId).catch(() => undefined);
     },
     [token],
   );
@@ -119,7 +117,7 @@ function HomeContent() {
       <HomeHero featured={featured} loading={featuredLoading} />
 
       {continueWatching.length > 0 ? (
-        <ContentRow title="Үзсээр байгаа" wide>
+        <ContentRow title="Үргэлжлүүлэх" wide>
           {continueWatching.map((item) => (
             <ContinueWatchingCard
               key={item.id}
@@ -171,7 +169,13 @@ function HomeContent() {
 
 // ---------------------------------------------------------------------------
 
-function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean }) {
+function HomeHero({
+  featured,
+  loading,
+}: {
+  featured: Content[];
+  loading: boolean;
+}) {
   const { token } = useAuth();
   const { openDetails } = useDetails();
   const [index, setIndex] = useState(0);
@@ -245,7 +249,7 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
       {/* Backdrop: portrait poster on phones (banners are wide art that
           crops to nothing on a narrow screen), wide banner from md up. */}
       <div className="absolute inset-0 -z-10">
-        {hero.posterUrl ?? hero.backdropUrl ? (
+        {(hero.posterUrl ?? hero.backdropUrl) ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             key={`${hero.id}-p`}
@@ -257,7 +261,7 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
             }}
           />
         ) : null}
-        {hero.backdropUrl ?? hero.posterUrl ? (
+        {(hero.backdropUrl ?? hero.posterUrl) ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             key={hero.id}
@@ -286,7 +290,10 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
         <div className="projector-light absolute inset-0" />
       </div>
 
-      <div key={hero.id} className="animate-rise w-full max-w-2xl px-5 pb-14 sm:px-10">
+      <div
+        key={hero.id}
+        className="animate-rise w-full max-w-2xl px-5 pb-14 sm:px-10"
+      >
         <p className="text-xs font-bold uppercase tracking-[0.3em] text-accent">
           {hero.type === "SERIES" ? "Онцлох цуврал" : "Онцлох кино"}
         </p>
@@ -307,7 +314,9 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
 
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-foreground/70">
           {hero.releaseYear ? (
-            <span className="font-semibold text-foreground">{hero.releaseYear}</span>
+            <span className="font-semibold text-foreground">
+              {hero.releaseYear}
+            </span>
           ) : null}
           {hero.ageRating ? (
             <span className="rounded border border-line-strong px-1.5 py-0.5 text-xs">
@@ -322,7 +331,9 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
               {g.genre.name}
             </span>
           ))}
-          {hero.durationSec ? <span>{formatDuration(hero.durationSec)}</span> : null}
+          {hero.durationSec ? (
+            <span>{formatDuration(hero.durationSec)}</span>
+          ) : null}
         </div>
 
         {hero.description ? (
@@ -345,7 +356,11 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
               Трейлер
             </Button>
           ) : null}
-          <Button variant="outline" size="lg" onClick={() => openDetails(hero.slug)}>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => openDetails(hero.slug)}
+          >
             <IconInfo size={18} />
             Дэлгэрэнгүй
           </Button>
@@ -375,7 +390,9 @@ function HomeHero({ featured, loading }: { featured: Content[]; loading: boolean
               aria-label={`${i + 1}-р онцлох`}
               aria-current={i === index}
               className={`h-1.5 rounded-full transition-all ${
-                i === index ? "w-7 bg-accent" : "w-3.5 bg-white/30 hover:bg-white/50"
+                i === index
+                  ? "w-7 bg-accent"
+                  : "w-3.5 bg-white/30 hover:bg-white/50"
               }`}
             />
           ))}
