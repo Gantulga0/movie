@@ -156,8 +156,18 @@ export const authApi = {
 
   me: (token: string) => apiFetch<User>("/auth/me", { token }),
 
-  logout: (token: string) =>
-    apiFetch<{ success: boolean }>("/auth/logout", { method: "POST", token }),
+  refresh: (refreshToken: string) =>
+    apiFetch<AuthResult>("/auth/refresh", {
+      method: "POST",
+      body: { refreshToken },
+    }),
+
+  logout: (token: string, refreshToken?: string) =>
+    apiFetch<{ success: boolean }>("/auth/logout", {
+      method: "POST",
+      token,
+      body: { refreshToken },
+    }),
 };
 
 export interface ContentListParams {

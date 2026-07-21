@@ -237,6 +237,19 @@ export class ContentService {
       throw new NotFoundException('Контент олдсонгүй');
     }
 
+    // The EntitlementGuard checks access to `contentId`; make sure the
+    // requested episode actually belongs to it, or a viewer entitled to a
+    // cheap title could stream another title's episodes (IDOR).
+    if (episodeId) {
+      const episode = await this.prisma.episode.findFirst({
+        where: { id: episodeId, season: { contentId } },
+        select: { id: true },
+      });
+      if (!episode) {
+        throw new NotFoundException('Анги олдсонгүй');
+      }
+    }
+
     const assetWhere = episodeId ? { episodeId } : { contentId };
     const [videoAssets, subtitles] = await this.prisma.$transaction([
       this.prisma.videoAsset.findMany({
@@ -402,9 +415,15 @@ export class ContentService {
     if (!dto.url && !dto.r2Key) {
       throw new BadRequestException('url эсвэл r2Key шаардлагатай');
     }
-    const { episodeId, ...data } = dto;
+    const { episodeId, url, ...rest } = dto;
+    // Defense-in-depth: for R2 assets never persist a permanent public URL —
+    // playback only ever resolves through a short-lived signed URL from r2Key.
+    const storedUrl =
+      rest.r2Key && this.storage.r2Configured ? null : (url ?? null);
     const asset = await this.prisma.videoAsset.create({
-      data: episodeId ? { episodeId, ...data } : { contentId, ...data },
+      data: episodeId
+        ? { episodeId, url: storedUrl, ...rest }
+        : { contentId, url: storedUrl, ...rest },
     });
     return { ...asset, sizeBytes: asset.sizeBytes === null ? null : Number(asset.sizeBytes) };
   }
@@ -421,9 +440,13 @@ export class ContentService {
     if (!dto.url && !dto.r2Key) {
       throw new BadRequestException('url эсвэл r2Key шаардлагатай');
     }
-    const { episodeId, ...data } = dto;
+    const { episodeId, url, ...rest } = dto;
+    const storedUrl =
+      rest.r2Key && this.storage.r2Configured ? null : (url ?? null);
     return this.prisma.subtitle.create({
-      data: episodeId ? { episodeId, ...data } : { contentId, ...data },
+      data: episodeId
+        ? { episodeId, url: storedUrl, ...rest }
+        : { contentId, url: storedUrl, ...rest },
     });
   }
 

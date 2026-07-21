@@ -12,7 +12,7 @@ import { contentApi } from "@/lib/api";
 import type { Content } from "@/lib/types";
 
 const DEBOUNCE_MS = 350;
-const RECENT_KEY = "mnflix_recent_searches";
+const RECENT_KEY = "infinity_recent_searches";
 const RECENT_LIMIT = 8;
 
 function readRecent(): string[] {

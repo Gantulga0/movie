@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { ToastProvider } from "@/components/ui/Toast";
 import { CursorGlow } from "@/components/CursorGlow";
+import { ContentProtection } from "@/components/ContentProtection";
 
 // Inter carries all body text — full Cyrillic coverage for Mongolian.
 const inter = Inter({
@@ -48,6 +49,7 @@ export default function RootLayout({
           <ToastProvider>{children}</ToastProvider>
         </AuthProvider>
         <CursorGlow />
+        <ContentProtection />
       </body>
     </html>
   );

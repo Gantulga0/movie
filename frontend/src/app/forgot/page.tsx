@@ -65,7 +65,7 @@ export default function ForgotPasswordPage() {
         newPassword: password,
       });
       // A successful reset signs the user straight in.
-      adoptSession(res.accessToken, res.user);
+      adoptSession(res.accessToken, res.refreshToken, res.user);
       router.replace("/home");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Шинэчлэхэд алдаа гарлаа.");

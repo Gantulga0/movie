@@ -36,11 +36,27 @@ model User {
   subscriptions Subscription[]
   payments      Payment[]
   rentals       Rental[]
+  refreshTokens RefreshToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([publicId])
+}
+
+/// Rotating refresh tokens — the raw token is only ever stored hashed, so a
+/// database leak can't be replayed. Revoking a row (or deleting the user)
+/// invalidates the session server-side, which a stateless JWT can't do.
+model RefreshToken {
+  id        String    @id @default(uuid())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 enum OtpChannel {

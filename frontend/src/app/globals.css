@@ -119,7 +119,7 @@ button:hover svg.icon-live {
   transform: scale(1.15) rotate(-5deg);
 }
 
-@keyframes mnflix-icon-draw {
+@keyframes infinity-icon-draw {
   from {
     stroke-dashoffset: 130;
   }
@@ -132,7 +132,7 @@ a:hover svg.icon-live :is(path, circle, rect),
 button:hover svg.icon-live :is(path, circle, rect),
 a[aria-current="page"] svg.icon-live :is(path, circle, rect) {
   stroke-dasharray: 130;
-  animation: mnflix-icon-draw 0.6s ease-out;
+  animation: infinity-icon-draw 0.6s ease-out;
 }
 
 /* Toast alerts slide up as they arrive. */
@@ -226,7 +226,7 @@ summary,
 
 /* ------------------------------------------------------------------ motion */
 
-@keyframes mnflix-fade {
+@keyframes infinity-fade {
   from {
     opacity: 0;
   }
@@ -235,7 +235,7 @@ summary,
   }
 }
 
-@keyframes mnflix-kenburns {
+@keyframes infinity-kenburns {
   from {
     transform: scale(1.05);
   }
@@ -244,7 +244,7 @@ summary,
   }
 }
 
-@keyframes mnflix-rise {
+@keyframes infinity-rise {
   from {
     opacity: 0;
     transform: translateY(16px);
@@ -255,7 +255,7 @@ summary,
   }
 }
 
-@keyframes mnflix-scale-in {
+@keyframes infinity-scale-in {
   from {
     opacity: 0;
     transform: scale(0.97) translateY(8px);
@@ -266,7 +266,7 @@ summary,
   }
 }
 
-@keyframes mnflix-slide-left {
+@keyframes infinity-slide-left {
   from {
     opacity: 0;
     transform: translateX(24px);
@@ -277,7 +277,7 @@ summary,
   }
 }
 
-@keyframes mnflix-slide-right {
+@keyframes infinity-slide-right {
   from {
     opacity: 0;
     transform: translateX(-24px);
@@ -289,7 +289,7 @@ summary,
 }
 
 /* Dropdown panels unfold from their trigger. */
-@keyframes mnflix-dropdown {
+@keyframes infinity-dropdown {
   from {
     opacity: 0;
     transform: translateY(-6px) scale(0.98);
@@ -301,7 +301,7 @@ summary,
 }
 
 /* Route change: the new page rises into the light. */
-@keyframes mnflix-page-enter {
+@keyframes infinity-page-enter {
   from {
     opacity: 0;
     transform: translateY(14px) scale(0.995);
@@ -313,11 +313,11 @@ summary,
 }
 
 .page-enter {
-  animation: mnflix-page-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: infinity-page-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* Sidebar labels slide in as the rail expands. */
-@keyframes mnflix-sidebar-label {
+@keyframes infinity-sidebar-label {
   from {
     opacity: 0;
     transform: translateX(-6px);
@@ -329,10 +329,10 @@ summary,
 }
 
 .sidebar-label {
-  animation: mnflix-sidebar-label 0.25s ease-out both;
+  animation: infinity-sidebar-label 0.25s ease-out both;
 }
 
-@keyframes mnflix-shimmer {
+@keyframes infinity-shimmer {
   from {
     background-position: 200% 0;
   }
@@ -342,7 +342,7 @@ summary,
 }
 
 /* Slow drift for the auth-page 3D frames. */
-@keyframes mnflix-drift {
+@keyframes infinity-drift {
   0%,
   100% {
     transform: translate3d(0, 0, 0) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
@@ -353,36 +353,36 @@ summary,
 }
 
 .animate-fade {
-  animation: mnflix-fade 0.7s ease forwards;
+  animation: infinity-fade 0.7s ease forwards;
 }
 
 .animate-kenburns {
-  animation: mnflix-kenburns 9s ease-out forwards;
+  animation: infinity-kenburns 9s ease-out forwards;
 }
 
 .animate-rise {
-  animation: mnflix-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: infinity-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .animate-scale-in {
-  animation: mnflix-scale-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: infinity-scale-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .animate-slide-left {
-  animation: mnflix-slide-left 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: infinity-slide-left 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .animate-slide-right {
-  animation: mnflix-slide-right 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: infinity-slide-right 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .animate-dropdown {
   transform-origin: top;
-  animation: mnflix-dropdown 0.16s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: infinity-dropdown 0.16s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .animate-drift {
-  animation: mnflix-drift 9s ease-in-out infinite;
+  animation: infinity-drift 9s ease-in-out infinite;
 }
 
 /* Skeleton shimmer — a faint beam sweeping across placeholder blocks. */
@@ -394,7 +394,7 @@ summary,
     rgba(151, 168, 214, 0.07) 60%
   );
   background-size: 200% 100%;
-  animation: mnflix-shimmer 1.6s linear infinite;
+  animation: infinity-shimmer 1.6s linear infinite;
 }
 
 /* ------------------------------------------------------- signature effects */

@@ -8,7 +8,9 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
+import { randomBytes, createHash } from 'crypto';
 import { OtpChannel, OtpPurpose, User } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 import { UsersService, SafeUser } from '../users/users.service';
 import { OtpService, OtpIssueResult } from '../otp/otp.service';
 import { RegisterDto } from './dto/register.dto';
@@ -21,6 +23,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 export interface AuthResult {
   user: SafeUser;
   accessToken: string;
+  refreshToken: string;
 }
 
 export interface PendingVerification {
@@ -35,6 +38,7 @@ export class AuthService {
     private readonly otp: OtpService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
   ) {}
 
   /**
@@ -163,14 +167,67 @@ export class AuthService {
     );
   }
 
-  private buildResult(user: User): AuthResult {
+  private async buildResult(user: User): Promise<AuthResult> {
     const accessToken = this.jwt.sign(
       { sub: user.id, role: user.role },
       {
-        secret: this.config.get<string>('JWT_SECRET', 'dev-secret'),
-        expiresIn: this.config.get<string>('JWT_EXPIRES_IN', '7d'),
+        secret: this.config.getOrThrow<string>('JWT_SECRET'),
+        // Short-lived access token; the refresh token keeps the user signed in.
+        expiresIn: this.config.get<string>('JWT_EXPIRES_IN', '30m'),
       },
     );
-    return { user: UsersService.sanitize(user), accessToken };
+    const refreshToken = await this.issueRefreshToken(user.id);
+    return { user: UsersService.sanitize(user), accessToken, refreshToken };
+  }
+
+  private hashToken(raw: string): string {
+    return createHash('sha256').update(raw).digest('hex');
+  }
+
+  /** Mint an opaque refresh token, storing only its hash. */
+  private async issueRefreshToken(userId: string): Promise<string> {
+    const raw = randomBytes(48).toString('base64url');
+    const days =
+      Number(this.config.get<string>('JWT_REFRESH_EXPIRES_DAYS', '30')) || 30;
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    await this.prisma.refreshToken.create({
+      data: { userId, tokenHash: this.hashToken(raw), expiresAt },
+    });
+    return raw;
+  }
+
+  /**
+   * Exchange a valid refresh token for a fresh access + refresh pair. The
+   * presented token is single-use (rotated), so a stolen one stops working the
+   * moment the real client refreshes.
+   */
+  async refresh(rawToken: string): Promise<AuthResult> {
+    if (!rawToken) {
+      throw new UnauthorizedException('Refresh token шаардлагатай');
+    }
+    const record = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash: this.hashToken(rawToken) },
+      include: { user: true },
+    });
+    if (!record || record.revokedAt || record.expiresAt < new Date()) {
+      throw new UnauthorizedException('Сессийн хугацаа дууссан. Дахин нэвтэрнэ үү.');
+    }
+    // Rotation: retire the presented token before issuing the next one.
+    await this.prisma.refreshToken.update({
+      where: { id: record.id },
+      data: { revokedAt: new Date() },
+    });
+    return this.buildResult(record.user);
+  }
+
+  /** Revoke a refresh token on logout. Silent if it's already gone. */
+  async revokeRefreshToken(rawToken?: string): Promise<void> {
+    if (!rawToken) return;
+    await this.prisma.refreshToken
+      .updateMany({
+        where: { tokenHash: this.hashToken(rawToken), revokedAt: null },
+        data: { revokedAt: new Date() },
+      })
+      .catch(() => undefined);
   }
 }

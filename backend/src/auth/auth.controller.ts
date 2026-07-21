@@ -15,6 +15,7 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { RefreshDto, LogoutDto } from './dto/refresh.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { SafeUser } from '../users/users.service';
@@ -64,12 +65,19 @@ export class AuthController {
     return this.auth.resetPassword(dto);
   }
 
-  // JWT is stateless: logout is handled by the client discarding the token.
-  // The endpoint exists so the client has a single place to confirm sign-out.
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @Throttle(OTP_THROTTLE)
+  refresh(@Body() dto: RefreshDto) {
+    return this.auth.refresh(dto.refreshToken);
+  }
+
+  // Revokes the refresh token server-side so the session can't be resumed.
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  logout() {
+  async logout(@Body() dto: LogoutDto) {
+    await this.auth.revokeRefreshToken(dto.refreshToken);
     return { success: true };
   }
 

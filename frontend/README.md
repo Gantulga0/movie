@@ -1,6 +1,6 @@
 # Movie App — Frontend (Next.js)
 
-Premium MNFlix-style streaming UI: landing page, auth (login/register), and a
+Premium Infinite-style streaming UI: landing page, auth (login/register), and a
 protected movie home page.
 
 ## Stack

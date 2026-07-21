@@ -36,6 +36,10 @@ const PRESIGN_FOLDERS = new Set([
   'thumbnails',
 ]);
 
+/** Folders whose objects must stay private — streamed via signed URLs only,
+ *  never through a public bucket domain. Everything else (images) is public. */
+const PRIVATE_FOLDERS = new Set(['videos', 'subtitles', 'trailers']);
+
 const PRESIGN_EXPIRES_SECONDS = 3600;
 
 /** Playback links live long enough for one sitting, then expire. */
@@ -87,6 +91,20 @@ export class StorageService {
     return this.config.get<string>('R2_PUBLIC_URL', '').replace(/\/$/, '');
   }
 
+  /** Private bucket for streamed media. Falls back to the main bucket when
+   *  unset, so single-bucket setups keep working unchanged. */
+  private get videoBucket(): string {
+    return this.config.get<string>('R2_VIDEO_BUCKET_NAME', '') || this.bucket;
+  }
+
+  private bucketForFolder(folder: string): string {
+    return PRIVATE_FOLDERS.has(folder) ? this.videoBucket : this.bucket;
+  }
+
+  private bucketForKey(key: string): string {
+    return this.bucketForFolder(key.split('/')[0] ?? '');
+  }
+
   private getClient(): S3Client {
     if (this.client) {
       return this.client;
@@ -120,7 +138,7 @@ export class StorageService {
     try {
       await this.getClient().send(
         new PutObjectCommand({
-          Bucket: this.bucket,
+          Bucket: this.bucketForFolder(folder),
           Key: key,
           Body: file.buffer,
           ContentType: file.mimetype,
@@ -131,7 +149,11 @@ export class StorageService {
       throw new InternalServerErrorException('File upload failed');
     }
 
-    const url = this.publicUrl ? `${this.publicUrl}/${key}` : key;
+    // Private folders never get a public URL — they stream via signed links.
+    const url =
+      !PRIVATE_FOLDERS.has(folder) && this.publicUrl
+        ? `${this.publicUrl}/${key}`
+        : key;
     return { key, url };
   }
 
@@ -165,7 +187,7 @@ export class StorageService {
   ): Promise<string> {
     return getSignedUrl(
       this.getClient(),
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      new GetObjectCommand({ Bucket: this.bucketForKey(key), Key: key }),
       { expiresIn },
     );
   }
@@ -189,14 +211,17 @@ export class StorageService {
     const uploadUrl = await getSignedUrl(
       this.getClient(),
       new PutObjectCommand({
-        Bucket: this.bucket,
+        Bucket: this.bucketForFolder(folder),
         Key: key,
         ContentType: contentType,
       }),
       { expiresIn: PRESIGN_EXPIRES_SECONDS },
     );
 
-    const url = this.publicUrl ? `${this.publicUrl}/${key}` : key;
+    const url =
+      !PRIVATE_FOLDERS.has(folder) && this.publicUrl
+        ? `${this.publicUrl}/${key}`
+        : key;
     return { key, url, uploadUrl, expiresIn: PRESIGN_EXPIRES_SECONDS };
   }
 }

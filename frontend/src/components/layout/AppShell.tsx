@@ -10,7 +10,7 @@ import { DetailsModalProvider } from "@/components/details/DetailsModalProvider"
 import { PageTransition } from "./PageTransition";
 import { SubscriptionProvider } from "@/lib/subscription-context";
 
-const SIDEBAR_KEY = "mnflix_sidebar_expanded";
+const SIDEBAR_KEY = "infinity_sidebar_expanded";
 
 /**
  * Signed-in chrome: auth guard, desktop sidebar (compact by default),

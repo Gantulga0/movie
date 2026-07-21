@@ -25,6 +25,7 @@ export interface User {
 export interface AuthResult {
   user: User;
   accessToken: string;
+  refreshToken: string;
 }
 
 export interface OtpIssue {
