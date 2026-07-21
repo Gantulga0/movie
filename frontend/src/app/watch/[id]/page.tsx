@@ -11,8 +11,6 @@ import { IconArrowLeft } from "@/components/ui/icons";
 const PROGRESS_INTERVAL_MS = 10_000;
 /** Playback counts as "completed" past this share of the runtime. */
 const COMPLETED_RATIO = 0.95;
-/** The watermark drifts to a new spot this often (anti-crop). */
-const WATERMARK_MOVE_MS = 20_000;
 
 function Player() {
   const router = useRouter();
@@ -312,46 +310,24 @@ function Player() {
             ))}
         </video>
 
-        <Watermark publicId={user.publicId} />
+        <BrandBadge />
       </div>
     </div>
   );
 }
 
-/**
- * Session watermark: the viewer's public id + time, drifting across the
- * frame so cropping it out of a screen recording is impractical. This is a
- * deterrent, not DRM — see docs/SECURITY.md for the real boundary.
- */
-function Watermark({ publicId }: { publicId: string }) {
-  const [position, setPosition] = useState({ top: "8%", left: "6%" });
-  const [stamp, setStamp] = useState("");
-
-  useEffect(() => {
-    function move() {
-      setPosition({
-        top: `${8 + Math.random() * 74}%`,
-        left: `${6 + Math.random() * 74}%`,
-      });
-      const now = new Date();
-      setStamp(
-        `${String(now.getHours()).padStart(2, "0")}:${String(
-          now.getMinutes(),
-        ).padStart(2, "0")}`,
-      );
-    }
-    move();
-    const timer = setInterval(move, WATERMARK_MOVE_MS);
-    return () => clearInterval(timer);
-  }, []);
-
+/** Fixed brand badge in the top-right corner of the player. */
+function BrandBadge() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute select-none text-[11px] font-semibold tracking-wider text-white/[.16] transition-[top,left] duration-1000"
-      style={position}
+      className="pointer-events-none absolute right-4 top-4 flex select-none items-center gap-1.5"
     >
-      USER-{publicId} • {stamp}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/infinity.png" alt="" className="h-5 w-auto opacity-40" />
+      <span className="display text-sm font-bold tracking-tight text-white/40">
+        INFINITE
+      </span>
     </div>
   );
 }

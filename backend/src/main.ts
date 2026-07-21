@@ -29,6 +29,15 @@ async function bootstrap() {
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`🚀 API running on http://localhost:${port}/api`);
+
+  // Render free tier spins the service down after 15 min of no traffic;
+  // self-ping every 10 min keeps it awake. RENDER_EXTERNAL_URL is set by Render.
+  const externalUrl = config.get<string>('RENDER_EXTERNAL_URL');
+  if (externalUrl) {
+    setInterval(() => {
+      fetch(`${externalUrl}/api/health`).catch(() => undefined);
+    }, 10 * 60 * 1000);
+  }
 }
 
 bootstrap();
