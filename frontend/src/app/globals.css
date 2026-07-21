@@ -464,3 +464,90 @@ summary,
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ------------------------------------------------------------ video player */
+
+/* The center tap glyph blooms and fades on play/pause. */
+@keyframes player-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+.player-ripple {
+  animation: player-pop 0.5s ease-out;
+}
+
+/* Settings / subtitle menus unfold from the button they anchor to. */
+@keyframes player-menu {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.player-menu {
+  animation: player-menu 0.14s ease-out;
+}
+
+/* Volume slider: indigo fill to the thumb, luminous white knob. */
+.player-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: var(--cursor-hand), pointer;
+}
+.player-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--accent) var(--fill, 0%),
+    rgba(255, 255, 255, 0.25) var(--fill, 0%)
+  );
+}
+.player-range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+}
+.player-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.player-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 12px;
+  width: 12px;
+  margin-top: -4px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 8px rgba(124, 140, 255, 0.9);
+}
+.player-range::-moz-range-thumb {
+  height: 12px;
+  width: 12px;
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 8px rgba(124, 140, 255, 0.9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-ripple,
+  .player-menu {
+    animation: none;
+  }
+}

@@ -40,7 +40,7 @@ export function ContinueWatchingCard({ item, onRemove }: ContinueWatchingCardPro
         className="block w-full text-left"
         aria-label={`${content.title} — үргэлжлүүлж үзэх`}
       >
-        <div className="relative aspect-video overflow-hidden rounded-xl border border-line bg-surface shadow-card transition duration-200 group-hover:-translate-y-1 group-hover:border-line-strong">
+        <div className="relative aspect-[2/3] overflow-hidden rounded-xl border border-line bg-surface shadow-card transition duration-200 group-hover:-translate-y-1 group-hover:border-line-strong">
           {content.posterUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img

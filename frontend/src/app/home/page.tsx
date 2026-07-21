@@ -117,7 +117,7 @@ function HomeContent() {
       <HomeHero featured={featured} loading={featuredLoading} />
 
       {continueWatching.length > 0 ? (
-        <ContentRow title="Үргэлжлүүлэх" wide>
+        <ContentRow title="Үргэлжлүүлэх">
           {continueWatching.map((item) => (
             <ContinueWatchingCard
               key={item.id}

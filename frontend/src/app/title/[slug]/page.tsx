@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { ContentCard } from "@/components/ContentCard";
 import { ContentRow } from "@/components/ContentRow";
+import { TrailerEmbed } from "@/components/TrailerEmbed";
 import { PaymentModal } from "@/components/billing/PaymentModal";
 import { AccessOptions } from "@/components/billing/AccessOptions";
 import { Badge } from "@/components/ui/Badge";
@@ -479,10 +480,9 @@ function TitleContent() {
           className="overflow-hidden p-0"
         >
           {trailerOpen ? (
-            <video
-              src={content.trailerUrl}
-              controls
-              autoPlay
+            <TrailerEmbed
+              url={content.trailerUrl}
+              title={content.title}
               className="aspect-video w-full bg-black"
             />
           ) : null}

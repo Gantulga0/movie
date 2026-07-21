@@ -12,6 +12,9 @@ import { authApi } from "./api";
 import type { PendingVerification, User } from "./types";
 
 const TOKEN_KEY = "mnflix_token";
+const LAST_ACTIVE_KEY = "mnflix_last_active";
+/** Auto sign-out after this long away from / idle on the site. */
+const IDLE_LIMIT_MS = 60 * 60 * 1000; // 1 hour
 
 interface AuthContextValue {
   user: User | null;
@@ -48,11 +51,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       queueMicrotask(() => setLoading(false));
       return;
     }
+    // Session went stale while the user was away — force a fresh login.
+    const last = Number(localStorage.getItem(LAST_ACTIVE_KEY) ?? 0);
+    if (last && Date.now() - last > IDLE_LIMIT_MS) {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(LAST_ACTIVE_KEY);
+      queueMicrotask(() => setLoading(false));
+      return;
+    }
     authApi
       .me(stored)
       .then((u) => {
         setToken(stored);
         setUser(u);
+        localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
       })
       .catch(() => {
         localStorage.removeItem(TOKEN_KEY);
@@ -63,9 +75,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const persist = useCallback((nextToken: string, nextUser: User) => {
     localStorage.setItem(TOKEN_KEY, nextToken);
+    localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
     setToken(nextToken);
     setUser(nextUser);
   }, []);
+
+  // Clear a session locally (idle expiry) without a backend round-trip.
+  const expire = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(LAST_ACTIVE_KEY);
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  // Track activity and sign out after IDLE_LIMIT_MS of inactivity. Playback
+  // counts as activity, so a long film never logs the viewer out mid-watch.
+  useEffect(() => {
+    if (!token) return;
+
+    const touch = () => localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
+    touch();
+
+    let last = Date.now();
+    const onActivity = () => {
+      const now = Date.now();
+      if (now - last > 30_000) {
+        last = now;
+        touch();
+      }
+    };
+    const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
+    events.forEach((e) =>
+      window.addEventListener(e, onActivity, { passive: true }),
+    );
+
+    const check = () => {
+      const la = Number(localStorage.getItem(LAST_ACTIVE_KEY) ?? 0);
+      if (!la || Date.now() - la <= IDLE_LIMIT_MS) return;
+      const video = document.querySelector("video");
+      if (video && !video.paused && !video.ended) {
+        touch(); // still watching — keep the session alive
+        return;
+      }
+      expire();
+    };
+    const timer = setInterval(check, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pagehide", touch);
+
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, onActivity));
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pagehide", touch);
+    };
+  }, [token, expire]);
 
   const login = useCallback(
     async (identifier: string, password: string) => {
@@ -112,6 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await authApi.logout(token).catch(() => undefined);
     }
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(LAST_ACTIVE_KEY);
     setToken(null);
     setUser(null);
   }, [token]);

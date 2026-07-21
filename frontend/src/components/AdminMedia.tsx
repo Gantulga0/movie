@@ -51,10 +51,9 @@ export function MediaSection({
   onChanged: () => void;
 }) {
   const { token } = useAuth();
-  const mode = useStorageMode();
   const [busy, setBusy] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
+  const [trailerUrl, setTrailerUrl] = useState(content.trailerUrl ?? "");
 
   async function uploadImage(kind: "poster" | "banner", file: File) {
     if (!token) return;
@@ -73,17 +72,18 @@ export function MediaSection({
     }
   }
 
-  async function uploadTrailer(file: File) {
+  async function saveTrailer() {
     if (!token) return;
     setBusy("trailer");
-    setProgress(0);
     setError("");
     try {
-      const res = await uploadVideoFile(token, mode, "trailers", file, setProgress);
-      await adminApi.contentUpdate(token, content.id, { trailerUrl: res.url });
+      const value = trailerUrl.trim();
+      await adminApi.contentUpdate(token, content.id, {
+        trailerUrl: value || null,
+      });
       onChanged();
     } catch {
-      setError("Трейлер хуулж чадсангүй. Дахин оролдоно уу.");
+      setError("Трейлер хадгалж чадсангүй. Дахин оролдоно уу.");
     } finally {
       setBusy(null);
     }
@@ -120,14 +120,36 @@ export function MediaSection({
       </div>
 
       <div className="mt-4">
-        <UploadRow
-          label={content.trailerUrl ? "Трейлер солих" : "Трейлер нэмэх"}
-          hint={content.trailerUrl ? "Трейлер орсон ✓" : "MP4/WebM файл"}
-          busy={busy === "trailer"}
-          progress={progress}
-          accept="video/*"
-          onFile={uploadTrailer}
-        />
+        <label className="text-xs font-semibold text-white/70">
+          Трейлер (YouTube линк)
+        </label>
+        <div className="mt-1.5 flex gap-2">
+          <input
+            value={trailerUrl}
+            onChange={(e) => setTrailerUrl(e.target.value)}
+            placeholder="https://www.youtube.com/watch?v=…"
+            aria-label="Трейлерийн YouTube линк"
+            className="min-w-0 flex-1 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/35 outline-none focus:border-brand"
+          />
+          <button
+            type="button"
+            onClick={saveTrailer}
+            disabled={
+              busy === "trailer" ||
+              trailerUrl.trim() === (content.trailerUrl ?? "")
+            }
+            className="rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20 disabled:opacity-40"
+          >
+            {busy === "trailer" ? "Хадгалж байна…" : "Хадгалах"}
+          </button>
+        </div>
+        {trailerUrl.trim() && !/youtube\.com|youtu\.be/.test(trailerUrl) ? (
+          <p className="mt-1 text-xs text-gold">
+            YouTube линк оруулна уу (youtube.com эсвэл youtu.be).
+          </p>
+        ) : content.trailerUrl ? (
+          <p className="mt-1 text-xs text-white/40">Трейлер орсон ✓</p>
+        ) : null}
       </div>
     </section>
   );

@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
 import { PaymentModal } from "@/components/billing/PaymentModal";
 import { AccessOptions } from "@/components/billing/AccessOptions";
+import { TrailerEmbed } from "@/components/TrailerEmbed";
 import { useDetails } from "./DetailsModalProvider";
 import {
   IconCheck,
@@ -206,7 +207,7 @@ export function DetailsModal({
             {/* Backdrop / trailer stage */}
             <div className="relative aspect-video max-h-[46vh] w-full overflow-hidden bg-background-deep">
               {trailerOpen && content.trailerUrl ? (
-                <TrailerPlayer url={content.trailerUrl} title={content.title} />
+                <TrailerEmbed url={content.trailerUrl} title={content.title} />
               ) : (
                 <>
                   {content.backdropUrl ? (
@@ -609,27 +610,6 @@ function EpisodeList({
       </div>
     </section>
   );
-}
-
-/** Trailer loads only after the user asks for it. */
-function TrailerPlayer({ url, title }: { url: string; title: string }) {
-  const isYouTube = /youtube\.com|youtu\.be/.test(url);
-  if (isYouTube) {
-    const id =
-      url.match(/(?:v=|youtu\.be\/|embed\/)([\w-]{11})/)?.[1] ?? null;
-    if (id) {
-      return (
-        <iframe
-          src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`}
-          title={`${title} — трейлер`}
-          allow="autoplay; encrypted-media; picture-in-picture"
-          allowFullScreen
-          className="h-full w-full"
-        />
-      );
-    }
-  }
-  return <video src={url} controls autoPlay className="h-full w-full bg-black" />;
 }
 
 function DetailsSkeleton() {

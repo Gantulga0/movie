@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { API_URL, ApiError, activityApi, contentApi } from "@/lib/api";
 import type { WatchSources } from "@/lib/types";
 import { ButtonLink, Button } from "@/components/ui/Button";
-import { IconArrowLeft } from "@/components/ui/icons";
+import { VideoPlayer } from "@/components/VideoPlayer";
 
 const PROGRESS_INTERVAL_MS = 10_000;
 /** Playback counts as "completed" past this share of the runtime. */
@@ -24,7 +24,6 @@ function Player() {
   const [error, setError] = useState<"subscription" | "rental" | "generic" | null>(
     null,
   );
-  const [qualityIndex, setQualityIndex] = useState(0);
   const [resumeAt, setResumeAt] = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastSaved = useRef(0);
@@ -213,9 +212,8 @@ function Player() {
   }
 
   const playable = sources.videoAssets.filter((a) => a.url);
-  const current = playable[qualityIndex];
 
-  if (!current) {
+  if (playable.length === 0) {
     return (
       <Shell>
         <div className="max-w-md text-center">
@@ -235,100 +233,26 @@ function Player() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-black">
-      <header className="flex items-center justify-between px-4 py-3">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-foreground/80 transition hover:bg-white/10 hover:text-foreground"
-        >
-          <IconArrowLeft size={17} />
-          Буцах
-        </button>
-
-        {playable.length > 1 ? (
-          <div className="flex gap-1.5" role="group" aria-label="Чанар сонгох">
-            {playable.map((asset, i) => (
-              <button
-                key={asset.id}
-                type="button"
-                onClick={() => {
-                  const t = videoRef.current?.currentTime ?? 0;
-                  setQualityIndex(i);
-                  // Keep the position across a quality switch.
-                  requestAnimationFrame(() => {
-                    if (videoRef.current) videoRef.current.currentTime = t;
-                  });
-                }}
-                aria-pressed={i === qualityIndex}
-                className={`rounded-md px-2.5 py-1 text-xs font-bold transition ${
-                  i === qualityIndex
-                    ? "bg-foreground text-background"
-                    : "bg-white/10 text-foreground/70 hover:bg-white/20"
-                }`}
-              >
-                {asset.quality.replace("P", "")}p
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </header>
-
-      <div className="relative flex flex-1 items-center justify-center">
-        <video
-          ref={videoRef}
-          key={current.id}
-          src={current.url!}
-          controls
-          autoPlay
-          controlsList="nodownload"
-          className="max-h-[calc(100vh-64px)] w-full"
-          crossOrigin="anonymous"
-          onLoadedMetadata={(e) => {
-            // Resume from the saved position on first load.
-            const video = e.currentTarget;
-            if (resumeAt > 0 && Math.abs(video.currentTime - resumeAt) > 2) {
-              video.currentTime = Math.min(
-                resumeAt,
-                Math.max(0, (video.duration || resumeAt) - 2),
-              );
-            }
-          }}
-          onPause={() => saveProgress()}
-          onEnded={() => saveProgress(true)}
-        >
-          {sources.subtitles
-            .filter((s) => s.url)
-            .map((s) => (
-              <track
-                key={s.id}
-                kind="subtitles"
-                src={s.url!}
-                srcLang={s.language}
-                label={s.label ?? s.language}
-              />
-            ))}
-        </video>
-
-        <BrandBadge />
-      </div>
-    </div>
-  );
-}
-
-/** Fixed brand badge in the top-right corner of the player. */
-function BrandBadge() {
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none absolute right-4 top-4 flex select-none items-center gap-1.5"
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/infinity.png" alt="" className="h-5 w-auto opacity-40" />
-      <span className="display text-sm font-bold tracking-tight text-white/40">
-        INFINITE
-      </span>
-    </div>
+    <VideoPlayer
+      videoRef={videoRef}
+      resumeAt={resumeAt}
+      onBack={() => router.back()}
+      onPause={() => saveProgress()}
+      onEnded={() => saveProgress(true)}
+      sources={playable.map((a) => ({
+        id: a.id,
+        url: a.url!,
+        label: a.quality === "P4K" ? "4K" : `${a.quality.replace("P", "")}p`,
+      }))}
+      subtitles={sources.subtitles
+        .filter((s) => s.url)
+        .map((s) => ({
+          id: s.id,
+          url: s.url!,
+          language: s.language,
+          label: s.label ?? s.language,
+        }))}
+    />
   );
 }
 
