@@ -89,12 +89,13 @@ function HomeContent() {
     [token],
   );
 
-  // One row per title — the latest unfinished episode/session wins.
+  // One row per title — the latest session wins. Titles watched to the end
+  // stay in the rail too, so nothing silently disappears once finished.
   const continueWatching = useMemo(() => {
     const seen = new Set<string>();
     const rows: HistoryItem[] = [];
     for (const row of history) {
-      if (row.completed || row.progressSec < 30) continue;
+      if (row.progressSec < 30) continue;
       if (seen.has(row.content.id)) continue;
       seen.add(row.content.id);
       rows.push(row);
