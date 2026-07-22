@@ -27,6 +27,21 @@ export interface PaymentCheckResult {
   transactionId: string | null;
 }
 
+/** The QR payload wire returns after confirm (QPay-style). */
+interface WireNextAction {
+  type?: string;
+  qr?: {
+    text?: string;
+    image_url?: string;
+    deeplinks?: Array<{
+      name: string;
+      description: string;
+      logo?: string;
+      link: string;
+    }>;
+  };
+}
+
 /** Subset of the wire.mn PaymentIntent object we rely on. */
 interface WirePaymentIntent {
   id: string;
@@ -140,35 +155,38 @@ export class WireService {
       `confirm-${params.paymentId}`,
     );
 
-    const checkoutUrl = this.actionUrl(
-      confirmed.next_action ?? intent.next_action,
-    );
-    if (!checkoutUrl) {
-      // Nothing to redirect to — log the whole confirmed intent so we can see
-      // exactly where the pay step (QR / deeplink / url) actually lives.
+    // wire returns a QPay-style QR payload: a QR image, its raw text, and a
+    // list of bank-app deeplinks. The client renders these in-app (no redirect).
+    const action = (confirmed.next_action ??
+      intent.next_action) as WireNextAction | null;
+    const qr = action?.qr;
+    if (!qr) {
       this.logger.warn(
-        `wire confirm produced no redirect url. status=${confirmed.status} ` +
+        `wire confirm: no qr in next_action. status=${confirmed.status} ` +
           `full=${JSON.stringify(confirmed)}`,
       );
     }
 
+    // image_url is a full data URI ("data:image/png;base64,…"); the client
+    // re-adds that prefix, so store the bare base64 payload only.
+    const img = qr?.image_url ?? '';
+    const qrImage = img.startsWith('data:')
+      ? img.slice(img.indexOf(',') + 1)
+      : img || null;
+
     return {
       invoiceId: intent.id,
-      qrText: null,
-      qrImage: null,
-      urls: [],
+      qrText: qr?.text ?? null,
+      qrImage,
+      urls: (qr?.deeplinks ?? []).map((d) => ({
+        name: d.name,
+        description: d.description,
+        link: d.link,
+      })),
       shortUrl: null,
-      checkoutUrl,
+      checkoutUrl: null,
       mock: false,
     };
-  }
-
-  /** Pulls a redirect URL out of a PaymentIntent `next_action` object. */
-  private actionUrl(next: Record<string, unknown> | null | undefined): string | null {
-    if (!next || typeof next !== 'object') return null;
-    const redirect = next.redirect_to_url as { url?: string } | undefined;
-    const nested = next.redirect as { url?: string } | undefined;
-    return redirect?.url ?? nested?.url ?? (next.url as string | undefined) ?? null;
   }
 
   // ----------------------------------------------------------------- check
