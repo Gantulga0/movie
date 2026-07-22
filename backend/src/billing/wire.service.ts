@@ -251,10 +251,24 @@ export class WireService {
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) {
-      this.logger.error(
-        `wire ${method} ${path} failed: ${res.status} ${await res.text()}`,
-      );
-      throw new InternalServerErrorException('Төлбөрийн систем холбогдсонгүй');
+      const text = await res.text();
+      this.logger.error(`wire ${method} ${path} failed: ${res.status} ${text}`);
+      // Surface wire's own error code/message so the reason is visible while
+      // setting the gateway up (e.g. operator not connected, amount invalid).
+      let detail = `${res.status}`;
+      try {
+        const parsed = JSON.parse(text) as {
+          error?: { code?: string; message?: string };
+        };
+        if (parsed.error) {
+          detail = [parsed.error.code, parsed.error.message]
+            .filter(Boolean)
+            .join(': ');
+        }
+      } catch {
+        if (text) detail = text.slice(0, 200);
+      }
+      throw new InternalServerErrorException(`wire.mn: ${detail}`);
     }
     return (await res.json()) as T;
   }
