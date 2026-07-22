@@ -245,11 +245,28 @@ export class WireService {
     };
     if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
 
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    const url = `${this.baseUrl}${path}`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch (e) {
+      // Transport-level failure (DNS, TLS, wrong/empty base URL) — never
+      // reached the server, so there's no HTTP status to read. undici puts
+      // the real reason (ENOTFOUND, ECONNREFUSED, …) on `.cause`.
+      const err = e as Error & { cause?: unknown };
+      const cause =
+        err.cause instanceof Error ? err.cause.message : String(err.cause ?? '');
+      this.logger.error(
+        `wire ${method} ${url} network error: ${err.message} ${cause}`,
+      );
+      throw new InternalServerErrorException(
+        `wire.mn-руу холбогдсонгүй (${this.baseUrl || 'BASE URL хоосон'})`,
+      );
+    }
     if (!res.ok) {
       const text = await res.text();
       this.logger.error(`wire ${method} ${path} failed: ${res.status} ${text}`);
