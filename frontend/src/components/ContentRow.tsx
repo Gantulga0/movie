@@ -88,7 +88,7 @@ export function ContentRow({
       <div className="group/row relative">
         <div
           ref={scrollerRef}
-          className="no-scrollbar flex snap-x snap-mandatory gap-3.5 overflow-x-auto scroll-smooth px-5 pb-2 sm:px-10"
+          className="no-scrollbar flex snap-x snap-proximity scroll-px-5 gap-3.5 overflow-x-auto scroll-smooth px-5 pb-2 sm:scroll-px-10 sm:px-10"
         >
           {loading
             ? Array.from({ length: skeletonCount }).map((_, i) => (

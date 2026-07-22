@@ -18,7 +18,7 @@ interface AuthShellProps {
  */
 export function AuthShell({ title, subtitle, children, footer }: AuthShellProps) {
   return (
-    <main className="relative isolate flex min-h-screen flex-col overflow-hidden bg-background-deep">
+    <main className="relative isolate flex min-h-[100dvh] flex-col overflow-hidden bg-background-deep">
       {/* Stage backdrop */}
       <div aria-hidden className="absolute inset-0 -z-10">
         <div

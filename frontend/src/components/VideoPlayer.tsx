@@ -220,12 +220,23 @@ export function VideoPlayer({
     const node = el as HTMLDivElement & {
       webkitRequestFullscreen?: () => void;
     };
+    const video = videoRef.current as
+      | (HTMLVideoElement & { webkitEnterFullscreen?: () => void })
+      | null;
     if (doc.fullscreenElement || doc.webkitFullscreenElement) {
       (doc.exitFullscreen ?? doc.webkitExitFullscreen)?.call(doc);
-    } else {
-      (node.requestFullscreen ?? node.webkitRequestFullscreen)?.call(node);
+      return;
     }
-  }, []);
+    if (node.requestFullscreen) {
+      node.requestFullscreen().catch(() => undefined);
+    } else if (node.webkitRequestFullscreen) {
+      node.webkitRequestFullscreen();
+    } else if (video?.webkitEnterFullscreen) {
+      // iPhone Safari: only the <video> element itself can enter fullscreen,
+      // never a wrapper <div>. Fall back to native video fullscreen there.
+      video.webkitEnterFullscreen();
+    }
+  }, [videoRef]);
 
   const togglePip = useCallback(async () => {
     const v = videoRef.current;
@@ -394,7 +405,7 @@ export function VideoPlayer({
       onMouseMove={revealControls}
       onTouchStart={revealControls}
       onClick={() => menu && setMenu(null)}
-      className={`relative h-screen w-screen select-none overflow-hidden bg-black ${
+      className={`fixed inset-0 select-none overflow-hidden bg-black ${
         !visible && playing ? "cursor-none" : ""
       }`}
     >
