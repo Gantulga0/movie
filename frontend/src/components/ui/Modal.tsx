@@ -94,13 +94,15 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-background-deep/80 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] overflow-y-auto bg-background-deep/80 backdrop-blur-sm"
       onMouseDown={(e) => {
         // Only a true backdrop press closes — not clicks inside the panel.
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
+      {/* Center within the DYNAMIC viewport (dvh), not the iOS layout viewport,
+          so the dialog stays vertically centered and clear of the toolbars. */}
+      <div className="flex min-h-dvh items-center justify-center p-4 sm:p-6">
         <div
           ref={panelRef}
           role="dialog"
