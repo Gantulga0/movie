@@ -5,22 +5,28 @@ import { useRouter } from "next/navigation";
 import { AuthShell, AuthLink } from "@/components/AuthShell";
 import { Field } from "@/components/Field";
 import { useAuth } from "@/lib/auth-context";
+import { useWelcome } from "@/lib/welcome-context";
 import { ApiError } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
   const { user, loading: authLoading, login } = useAuth();
+  const { play } = useWelcome();
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<{ identifier?: string; password?: string }>({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Fresh sign-in plays the cinematic hand-off; the welcome overlay owns the
+  // navigation to /home once it has covered the screen.
+  const [transitioning, setTransitioning] = useState(false);
 
-  // Already-authenticated users skip the login page.
+  // Already-authenticated users skip the login page — but never yank the
+  // screen away mid-animation for someone who just signed in.
   useEffect(() => {
-    if (!authLoading && user) router.replace("/home");
-  }, [authLoading, user, router]);
+    if (!authLoading && user && !transitioning) router.replace("/home");
+  }, [authLoading, user, router, transitioning]);
 
   function validate() {
     const next: typeof errors = {};
@@ -38,7 +44,10 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login(identifier.trim(), password);
-      router.replace("/home");
+      // Suppress the auto-redirect and hand off to the ignition overlay,
+      // which routes to /home once it has covered the screen.
+      setTransitioning(true);
+      play("/home");
     } catch (err) {
       // Unverified accounts get bounced to the OTP screen — the API already
       // sent a fresh code along with this error.

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Sofia_Sans_Condensed } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
+import { WelcomeProvider } from "@/lib/welcome-context";
 import { ToastProvider } from "@/components/ui/Toast";
 import { CursorGlow } from "@/components/CursorGlow";
 import { ContentProtection } from "@/components/ContentProtection";
@@ -46,7 +47,9 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-background text-foreground">
         <AuthProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <WelcomeProvider>{children}</WelcomeProvider>
+          </ToastProvider>
         </AuthProvider>
         <CursorGlow />
         <ContentProtection />
