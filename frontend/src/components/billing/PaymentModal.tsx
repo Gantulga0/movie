@@ -116,18 +116,37 @@ export function PaymentModal({
             ) : null}
 
             {invoice.urls.length > 0 ? (
-              <div className="mt-4">
+              <div className="mt-5">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted">
-                  Банкны апп-аар төлөх
+                  Банкны аппаар төлөх
                 </p>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  {invoice.urls.slice(0, 8).map((u) => (
+                <div className="no-scrollbar mt-3 grid max-h-60 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-5">
+                  {invoice.urls.map((u) => (
                     <a
                       key={u.name}
                       href={u.link}
-                      className="truncate rounded-lg border border-line bg-white/[.04] px-3 py-2 text-center text-xs font-semibold text-foreground/85 transition hover:bg-white/10"
+                      title={u.description || u.name}
+                      className="group flex flex-col items-center gap-1.5 rounded-xl border border-line bg-white/[.03] p-2 transition hover:-translate-y-0.5 hover:border-accent/50 hover:bg-white/[.07]"
                     >
-                      {u.description || u.name}
+                      {u.logo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={u.logo}
+                          alt=""
+                          loading="lazy"
+                          className="h-9 w-9 rounded-lg bg-white/90 object-contain p-0.5"
+                          onError={(e) => {
+                            e.currentTarget.style.visibility = "hidden";
+                          }}
+                        />
+                      ) : (
+                        <span className="grid h-9 w-9 place-items-center rounded-lg bg-surface-raised text-[11px] font-bold text-foreground/70">
+                          {(u.description || u.name).slice(0, 2)}
+                        </span>
+                      )}
+                      <span className="w-full truncate text-center text-[10px] font-medium leading-tight text-foreground/80">
+                        {u.description || u.name}
+                      </span>
                     </a>
                   ))}
                 </div>

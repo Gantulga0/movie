@@ -14,7 +14,12 @@ export interface PaymentInvoice {
   invoiceId: string;
   qrText: string | null;
   qrImage: string | null;
-  urls: Array<{ name: string; description: string; link: string }>;
+  urls: Array<{
+    name: string;
+    description: string;
+    link: string;
+    logo?: string;
+  }>;
   shortUrl: string | null;
   /** Hosted-checkout URL to redirect to; null in mock mode. */
   checkoutUrl: string | null;
@@ -182,6 +187,7 @@ export class WireService {
         name: d.name,
         description: d.description,
         link: d.link,
+        logo: d.logo,
       })),
       shortUrl: null,
       checkoutUrl: null,
