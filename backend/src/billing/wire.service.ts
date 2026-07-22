@@ -65,7 +65,7 @@ export class WireService {
 
   private get baseUrl(): string {
     return this.config
-      .get<string>('WIRE_BASE_URL', 'https://api.wirepayment.mn/v1')
+      .get<string>('WIRE_BASE_URL', 'https://api.wire.mn/v1')
       .replace(/\/$/, '');
   }
 
