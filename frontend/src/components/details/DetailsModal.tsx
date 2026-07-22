@@ -149,6 +149,11 @@ export function DetailsModal({
     setRenting(true);
     try {
       const res = await billingApi.rent(token, content.id);
+      // Real wire.mn → hosted checkout page; mock → in-app settle dialog.
+      if (res.invoice.checkoutUrl) {
+        window.location.href = res.invoice.checkoutUrl;
+        return;
+      }
       setRentCheckout(res);
     } catch (err) {
       setRentError(err instanceof Error ? err.message : "Алдаа гарлаа.");
@@ -460,7 +465,7 @@ export function DetailsModal({
         )}
       </Modal>
 
-      {/* Rental payment */}
+      {/* Rental payment (mock mode only; real payments redirect to wire.mn) */}
       {rentCheckout && content ? (
         <PaymentModal
           open

@@ -431,6 +431,7 @@ enum SubscriptionStatus {
 
 enum PaymentMethod {
   QPAY
+  WIRE
   CARD
   BANK
 }

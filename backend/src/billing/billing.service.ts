@@ -15,7 +15,7 @@ import {
   SubscriptionStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { QpayService } from './qpay.service';
+import { WireService } from './wire.service';
 import { SafeUser } from '../users/users.service';
 
 /** Card-level content shape rentals are listed with. */
@@ -38,9 +38,20 @@ const rentalContentSelect = {
 export class BillingService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly qpay: QpayService,
+    private readonly wire: WireService,
     private readonly config: ConfigService,
   ) {}
+
+  /** Public web origin, for building wire.mn hosted-checkout return URLs. */
+  private webUrl(): string {
+    const explicit = this.config.get<string>('APP_WEB_URL');
+    const base =
+      explicit ??
+      this.config
+        .get<string>('CORS_ORIGIN', 'http://localhost:3000')
+        .split(',')[0];
+    return base.replace(/\/$/, '');
+  }
 
   // ----------------------------------------------------------------- plans
 
@@ -128,15 +139,17 @@ export class BillingService {
         userId: user.id,
         contentId: content.id,
         amount: content.rentalPrice,
-        method: PaymentMethod.QPAY,
+        method: PaymentMethod.WIRE,
       },
     });
 
-    const invoice = await this.qpay.createInvoice({
+    const invoice = await this.wire.createCheckout({
       paymentId: payment.id,
-      userPublicId: user.publicId,
       amount: content.rentalPrice,
       description: `${this.config.get('APP_NAME', 'Infinite')} — Түрээс: ${content.title}`,
+      // wire.mn returns here after the hosted page; the title screen re-checks
+      // access on load, and ?wpay lets it finalize immediately.
+      successUrl: `${this.webUrl()}/title/${content.slug}?wpay=${payment.id}`,
     });
 
     await this.prisma.payment.update({
@@ -159,8 +172,8 @@ export class BillingService {
 
   // -------------------------------------------------------------- checkout
 
-  /** Creates a PENDING payment and a QPay invoice the client can render. */
-  async checkout(user: SafeUser, planId: string, method?: PaymentMethod) {
+  /** Creates a PENDING payment and a wire.mn checkout the client can open. */
+  async checkout(user: SafeUser, planId: string) {
     const plan = await this.prisma.plan.findFirst({
       where: { id: planId, active: true },
     });
@@ -173,15 +186,16 @@ export class BillingService {
         userId: user.id,
         planId: plan.id,
         amount: plan.price,
-        method: method ?? PaymentMethod.QPAY,
+        method: PaymentMethod.WIRE,
       },
     });
 
-    const invoice = await this.qpay.createInvoice({
+    const invoice = await this.wire.createCheckout({
       paymentId: payment.id,
-      userPublicId: user.publicId,
       amount: plan.price,
       description: `${this.config.get('APP_NAME', 'Infinite')} — ${plan.name}`,
+      // wire.mn returns to the plans page; ?wpay finalizes the moment we land.
+      successUrl: `${this.webUrl()}/plans?wpay=${payment.id}`,
     });
 
     await this.prisma.payment.update({
@@ -220,7 +234,7 @@ export class BillingService {
       return { status: payment.status, subscription: null, rental: null };
     }
 
-    const result = await this.qpay.checkPayment(payment.invoiceId);
+    const result = await this.wire.checkPayment(payment.invoiceId);
     if (result.paid && result.paidAmount >= payment.amount) {
       const granted = await this.finalize(payment.id, result.transactionId);
       return { status: PaymentStatus.PAID, ...granted };
@@ -228,31 +242,43 @@ export class BillingService {
     return { status: payment.status, subscription: null, rental: null };
   }
 
-  /** QPay server-to-server callback; also polled from the payment screen. */
-  async handleCallback(paymentId: string) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id: paymentId },
-    });
-    if (!payment || payment.status === PaymentStatus.PAID || !payment.invoiceId) {
-      return { ok: true };
+  /**
+   * wire.mn webhook. Verifies the signature, then finalizes the matching
+   * payment once wire confirms the intent succeeded. Signature failures throw
+   * so wire retries; unknown/duplicate events are acknowledged quietly.
+   */
+  async handleWireWebhook(rawBody: Buffer, signature: string | undefined) {
+    const event = this.wire.verifyWebhook(rawBody, signature);
+    if (event.type !== 'payment_intent.succeeded') {
+      return { received: true };
     }
-    const result = await this.qpay.checkPayment(payment.invoiceId);
+    const intentId = (event.data?.object?.id as string | undefined) ?? undefined;
+    if (!intentId) return { received: true };
+
+    const payment = await this.prisma.payment.findFirst({
+      where: { invoiceId: intentId },
+    });
+    if (!payment || payment.status === PaymentStatus.PAID) {
+      return { received: true };
+    }
+    // Re-confirm with wire before granting entitlement (defence in depth).
+    const result = await this.wire.checkPayment(intentId);
     if (result.paid && result.paidAmount >= payment.amount) {
       await this.finalize(payment.id, result.transactionId);
     }
-    return { ok: true };
+    return { received: true };
   }
 
   /** Dev helper: settles a mock invoice without a real bank transfer. */
   async mockPay(paymentId: string, user: SafeUser) {
-    if (this.config.get('NODE_ENV') === 'production' || !this.qpay.isMock) {
-      throw new ForbiddenException('Mock төлбөр зөвхөн тест орчинд ажиллана');
-    }
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
     });
     if (!payment || payment.userId !== user.id) {
       throw new NotFoundException('Төлбөр олдсонгүй');
+    }
+    if (this.config.get('NODE_ENV') === 'production' || !this.wire.isMock) {
+      throw new ForbiddenException('Mock төлбөр зөвхөн тест орчинд ажиллана');
     }
     if (payment.status === PaymentStatus.PAID) {
       throw new BadRequestException('Төлбөр аль хэдийн төлөгдсөн');

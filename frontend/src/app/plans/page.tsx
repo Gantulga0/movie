@@ -50,12 +50,38 @@ function PlansContent() {
 
   useEffect(refreshMine, [refreshMine]);
 
+  // Returning from wire.mn's hosted page: ?wpay=<paymentId> lets us finalize
+  // and confirm immediately, without waiting on the webhook.
+  useEffect(() => {
+    if (!token) return;
+    const params = new URLSearchParams(window.location.search);
+    const wpay = params.get("wpay");
+    if (!wpay) return;
+
+    let tries = 0;
+    const timer = setInterval(async () => {
+      tries += 1;
+      const res = await billingApi.check(token, wpay).catch(() => null);
+      if (res?.status === "PAID" || tries >= 5) {
+        clearInterval(timer);
+        refreshMine();
+        window.history.replaceState(null, "", "/plans");
+      }
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [token, refreshMine]);
+
   async function startCheckout(plan: Plan) {
     if (!token) return;
     setError("");
     setPaying(plan.id);
     try {
       const res = await billingApi.checkout(token, plan.id);
+      // Real wire.mn → hosted checkout page; mock → in-app settle dialog.
+      if (res.invoice.checkoutUrl) {
+        window.location.href = res.invoice.checkoutUrl;
+        return;
+      }
       setCheckout(res);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Алдаа гарлаа.");
@@ -208,12 +234,12 @@ function PlansContent() {
         </section>
       ) : null}
 
-      {/* Checkout dialog */}
+      {/* Checkout dialog (mock mode only; real payments redirect to wire.mn) */}
       {checkout ? (
         <PaymentModal
           open
           onClose={() => setCheckout(null)}
-          title="QPay төлбөр"
+          title="wire.mn төлбөр"
           subtitle={checkout.plan.name}
           amount={checkout.amount}
           paymentId={checkout.paymentId}

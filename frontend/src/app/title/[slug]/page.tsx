@@ -109,6 +109,28 @@ function TitleContent() {
       .catch(() => undefined);
   }, [token, contentId]);
 
+  // Returning from wire.mn's hosted page: ?wpay=<paymentId> finalizes the
+  // rental and re-checks access without waiting on the webhook.
+  useEffect(() => {
+    if (!token) return;
+    const params = new URLSearchParams(window.location.search);
+    const wpay = params.get("wpay");
+    if (!wpay) return;
+
+    let tries = 0;
+    const timer = setInterval(async () => {
+      tries += 1;
+      const res = await billingApi.check(token, wpay).catch(() => null);
+      if (res?.status === "PAID" || tries >= 5) {
+        clearInterval(timer);
+        refreshAccess();
+        activityApi.history(token).then(setHistory).catch(() => undefined);
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [token, refreshAccess]);
+
   async function toggleList() {
     if (!token || !content) return;
     setInList((v) => !v);
@@ -134,6 +156,11 @@ function TitleContent() {
     setRenting(true);
     try {
       const res = await billingApi.rent(token, content.id);
+      // Real wire.mn → hosted checkout page; mock → in-app settle dialog.
+      if (res.invoice.checkoutUrl) {
+        window.location.href = res.invoice.checkoutUrl;
+        return;
+      }
       setRentCheckout(res);
     } catch (err) {
       setRentError(err instanceof Error ? err.message : "Алдаа гарлаа.");
@@ -489,7 +516,7 @@ function TitleContent() {
         </Modal>
       ) : null}
 
-      {/* Rental payment */}
+      {/* Rental payment (mock mode only; real payments redirect to wire.mn) */}
       {rentCheckout ? (
         <PaymentModal
           open

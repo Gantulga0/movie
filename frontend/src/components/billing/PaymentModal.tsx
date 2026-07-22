@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { billingApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import type { PaymentCheck, QpayInvoice } from "@/lib/types";
+import type { PaymentCheck, PaymentInvoice } from "@/lib/types";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { IconCheck } from "@/components/ui/icons";
@@ -14,12 +14,12 @@ const POLL_MS = 3000;
 interface PaymentModalProps {
   open: boolean;
   onClose: () => void;
-  /** e.g. "QPay төлбөр" heading context line. */
+  /** e.g. "wire.mn төлбөр" heading context line. */
   title: string;
   subtitle: string;
   amount: number;
   paymentId: string;
-  invoice: QpayInvoice;
+  invoice: PaymentInvoice;
   /** Fired once when the payment lands. */
   onPaid: (check: PaymentCheck) => void;
   /** Success-state contents (message + follow-up actions). */
@@ -27,8 +27,9 @@ interface PaymentModalProps {
 }
 
 /**
- * Shared QPay invoice dialog used by plan checkout and movie rentals:
- * QR + bank deep links, payment polling, dev-mode mock settle button.
+ * Shared payment dialog used by plan checkout and movie rentals in mock
+ * mode: payment polling and the dev-mode mock settle button. (Real wire.mn
+ * payments redirect to the hosted checkout page instead of opening this.)
  */
 export function PaymentModal({
   open,
@@ -98,18 +99,18 @@ export function PaymentModal({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`data:image/png;base64,${invoice.qrImage}`}
-                  alt="QPay QR код"
+                  alt="Төлбөрийн QR код"
                   className="h-52 w-52"
                 />
               </div>
             ) : invoice.mock ? (
               <div className="mt-5 rounded-xl border border-gold/30 bg-gold/10 px-4 py-5 text-center">
                 <p className="text-sm font-semibold text-gold">
-                  Тест горим (QPay холбогдоогүй)
+                  Тест горим (wire.mn холбогдоогүй)
                 </p>
                 <p className="mt-1 text-xs text-muted">
-                  QPay merchant бүртгэл холбогдсоны дараа энд жинхэнэ QR код
-                  гарна.
+                  wire.mn түлхүүр холбогдсоны дараа төлбөрийн хуудас руу
+                  шилжинэ.
                 </p>
               </div>
             ) : null}

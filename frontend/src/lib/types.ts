@@ -164,12 +164,14 @@ export interface MySubscription {
   history: Subscription[];
 }
 
-export interface QpayInvoice {
+export interface PaymentInvoice {
   invoiceId: string;
   qrText: string | null;
   qrImage: string | null;
   urls: Array<{ name: string; description: string; link: string }>;
   shortUrl: string | null;
+  /** wire.mn hosted-checkout URL to redirect to; null in mock mode. */
+  checkoutUrl?: string | null;
   mock: boolean;
 }
 
@@ -177,7 +179,7 @@ export interface CheckoutResult {
   paymentId: string;
   amount: number;
   plan: { id: string; name: string; durationDay: number };
-  invoice: QpayInvoice;
+  invoice: PaymentInvoice;
 }
 
 export interface RentCheckoutResult {
@@ -189,7 +191,7 @@ export interface RentCheckoutResult {
     slug: string;
     rentalDurationHours: number;
   };
-  invoice: QpayInvoice;
+  invoice: PaymentInvoice;
 }
 
 export interface Rental {

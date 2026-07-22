@@ -5,7 +5,9 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody keeps the unparsed request buffer around so the wire.mn webhook
+  // can verify its HMAC signature against the exact bytes wire signed.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const config = app.get(ConfigService);
 
   app.setGlobalPrefix('api');

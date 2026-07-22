@@ -2,13 +2,16 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
   Post,
-  Query,
+  RawBodyRequest,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { BillingService } from './billing.service';
 import { CheckoutDto, RentDto } from './dto/checkout.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -33,7 +36,7 @@ export class BillingController {
   @Post('checkout')
   @UseGuards(JwtAuthGuard)
   checkout(@CurrentUser() user: SafeUser, @Body() dto: CheckoutDto) {
-    return this.billing.checkout(user, dto.planId, dto.method);
+    return this.billing.checkout(user, dto.planId);
   }
 
   /** One-time rental purchase for a single title. */
@@ -65,15 +68,14 @@ export class BillingController {
     return this.billing.mockPay(id, user);
   }
 
-  // QPay calls this server-to-server after the customer pays.
-  @Get('callback')
-  callbackGet(@Query('paymentId') paymentId: string) {
-    return this.billing.handleCallback(paymentId);
-  }
-
-  @Post('callback')
+  // wire.mn posts here when a payment intent settles. Verified by signature
+  // against the raw body (see main.ts `rawBody: true`).
+  @Post('wire/webhook')
   @HttpCode(HttpStatus.OK)
-  callbackPost(@Query('paymentId') paymentId: string) {
-    return this.billing.handleCallback(paymentId);
+  wireWebhook(
+    @Req() req: RawBodyRequest<Request>,
+    @Headers('wirepayment-signature') signature: string,
+  ) {
+    return this.billing.handleWireWebhook(req.rawBody ?? Buffer.from(''), signature);
   }
 }
