@@ -73,60 +73,84 @@ export function PaymentModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} label={title}>
-      <div className="p-6 sm:p-8">
-        {paid ? (
-          <div className="text-center">
-            <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-success/15 text-success">
-              <IconCheck size={30} />
-            </div>
-            <h2 className="display mt-4 text-2xl font-semibold text-foreground">
-              Төлбөр амжилттай
-            </h2>
-            <div className="mt-2">{successContent}</div>
+    <Modal
+      open={open}
+      onClose={onClose}
+      label={title}
+      className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden"
+    >
+      {paid ? (
+        <div className="p-7 text-center sm:p-9">
+          <div className="animate-scale-in mx-auto grid h-16 w-16 place-items-center rounded-full bg-success/15 text-success ring-1 ring-success/30">
+            <IconCheck size={30} />
           </div>
-        ) : (
-          <>
-            <h2 className="display text-xl font-semibold text-foreground">
-              {title}
-            </h2>
-            <p className="mt-1 text-sm text-muted">
-              {subtitle} — {formatMnt(amount)}
+          <h2 className="display mt-4 text-2xl font-semibold text-foreground">
+            Төлбөр амжилттай
+          </h2>
+          <div className="mt-2">{successContent}</div>
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col">
+          {/* Header — pinned (right padding clears the close button) */}
+          <div className="flex items-end justify-between gap-3 px-6 pb-4 pr-14 pt-6 sm:px-7 sm:pr-16">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-accent">
+                {title}
+              </p>
+              <p className="mt-1 truncate text-sm text-muted">{subtitle}</p>
+            </div>
+            <p className="display shrink-0 text-xl font-bold tabular-nums text-foreground">
+              {formatMnt(amount)}
             </p>
+          </div>
 
+          {/* Body — the only scroll region */}
+          <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-6 sm:px-7">
             {invoice.qrImage ? (
-              <div className="mt-5 flex justify-center rounded-xl bg-white p-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`data:image/png;base64,${invoice.qrImage}`}
-                  alt="Төлбөрийн QR код"
-                  className="h-52 w-52"
-                />
+              <div className="flex flex-col items-center">
+                <div className="rounded-2xl bg-white p-3.5 shadow-[0_8px_30px_rgba(3,6,18,0.5)] ring-1 ring-black/5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`data:image/png;base64,${invoice.qrImage}`}
+                    alt="Төлбөрийн QR код"
+                    className="h-44 w-44 sm:h-52 sm:w-52"
+                  />
+                </div>
+                <p className="mt-3 text-center text-xs text-muted">
+                  Банкныхаа аппаар QR кодыг уншуулна уу
+                </p>
               </div>
             ) : invoice.mock ? (
-              <div className="mt-5 rounded-xl border border-gold/30 bg-gold/10 px-4 py-5 text-center">
+              <div className="rounded-xl border border-gold/30 bg-gold/10 px-4 py-5 text-center">
                 <p className="text-sm font-semibold text-gold">
                   Тест горим (wire.mn холбогдоогүй)
                 </p>
                 <p className="mt-1 text-xs text-muted">
-                  wire.mn түлхүүр холбогдсоны дараа төлбөрийн хуудас руу
-                  шилжинэ.
+                  wire.mn түлхүүр холбогдсоны дараа энд QR код гарна.
                 </p>
               </div>
-            ) : null}
+            ) : (
+              <div className="rounded-xl border border-line bg-surface-raised/40 px-4 py-6 text-center text-sm text-muted">
+                Төлбөрийн мэдээлэл ачаалж байна…
+              </div>
+            )}
 
             {invoice.urls.length > 0 ? (
-              <div className="mt-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted">
-                  Банкны аппаар төлөх
-                </p>
-                <div className="no-scrollbar mt-3 grid max-h-60 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-5">
+              <div className="mt-6">
+                <div className="mb-3 flex items-center gap-3">
+                  <span className="h-px flex-1 bg-line" />
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                    эсвэл банкны апп
+                  </span>
+                  <span className="h-px flex-1 bg-line" />
+                </div>
+                <div className="grid grid-cols-4 gap-2 pb-2 sm:grid-cols-5">
                   {invoice.urls.map((u) => (
                     <a
                       key={u.name}
                       href={u.link}
                       title={u.description || u.name}
-                      className="group flex flex-col items-center gap-1.5 rounded-xl border border-line bg-white/[.03] p-2 transition hover:-translate-y-0.5 hover:border-accent/50 hover:bg-white/[.07]"
+                      className="group flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-line bg-white/[0.03] p-2 transition active:scale-95 hover:-translate-y-0.5 hover:border-accent/50 hover:bg-white/[0.07]"
                     >
                       {u.logo ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -134,7 +158,7 @@ export function PaymentModal({
                           src={u.logo}
                           alt=""
                           loading="lazy"
-                          className="h-9 w-9 rounded-lg bg-white/90 object-contain p-0.5"
+                          className="h-9 w-9 rounded-lg bg-white/95 object-contain p-0.5"
                           onError={(e) => {
                             e.currentTarget.style.visibility = "hidden";
                           }}
@@ -152,24 +176,26 @@ export function PaymentModal({
                 </div>
               </div>
             ) : null}
+          </div>
 
-            <div className="mt-5 flex items-center justify-center gap-2 text-sm text-muted">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-gold" />
+          {/* Footer — pinned */}
+          <div className="border-t border-line px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-7">
+            <div className="flex items-center justify-center gap-2 text-sm text-muted">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-gold shadow-[0_0_8px_rgba(230,185,94,0.7)]" />
               Төлбөр хүлээгдэж байна…
             </div>
-
             {invoice.mock ? (
               <Button
                 variant="outline"
-                className="mt-4 w-full border-gold/40 text-gold hover:bg-gold/10"
+                className="mt-3 w-full border-gold/40 text-gold hover:bg-gold/10"
                 onClick={mockPay}
               >
                 [Тест] Төлбөр төлөгдсөн гэж үзэх
               </Button>
             ) : null}
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
