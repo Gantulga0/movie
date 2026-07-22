@@ -144,11 +144,11 @@ export class WireService {
       confirmed.next_action ?? intent.next_action,
     );
     if (!checkoutUrl) {
-      // Nothing to redirect to — log the shape so we can map it exactly.
+      // Nothing to redirect to — log the whole confirmed intent so we can see
+      // exactly where the pay step (QR / deeplink / url) actually lives.
       this.logger.warn(
-        `wire next_action carried no redirect url: ${JSON.stringify(
-          confirmed.next_action,
-        )}`,
+        `wire confirm produced no redirect url. status=${confirmed.status} ` +
+          `full=${JSON.stringify(confirmed)}`,
       );
     }
 
