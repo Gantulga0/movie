@@ -75,7 +75,14 @@ export class BillingController {
   wireWebhook(
     @Req() req: RawBodyRequest<Request>,
     @Headers('wirepayment-signature') signature: string,
+    @Headers('x-forwarded-for') forwardedFor: string,
   ) {
-    return this.billing.handleWireWebhook(req.rawBody ?? Buffer.from(''), signature);
+    // Behind Render's proxy the real client IP is the first X-Forwarded-For hop.
+    const clientIp = forwardedFor?.split(',')[0]?.trim() || req.ip;
+    return this.billing.handleWireWebhook(
+      req.rawBody ?? Buffer.from(''),
+      signature,
+      clientIp,
+    );
   }
 }

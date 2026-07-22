@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -26,23 +27,31 @@ export interface PaymentCheckResult {
   transactionId: string | null;
 }
 
-/** A verified webhook event (Stripe-style envelope). */
+/** Subset of the wire.mn PaymentIntent object we rely on. */
+interface WirePaymentIntent {
+  id: string;
+  status: string;
+  amount?: number;
+  next_action?: Record<string, unknown> | null;
+}
+
+/** A verified webhook event. `data` carries the affected resource. */
 export interface WireEvent {
   type: string;
-  data: { object: Record<string, unknown> };
+  data: Record<string, unknown> & { object?: Record<string, unknown> };
 }
 
 /**
- * wire.mn unified payment gateway client.
+ * wire.mn (api.wirepayment.mn) gateway client.
  *
- * Uses the hosted-checkout flow: create a PaymentIntent, open a checkout
- * session, and redirect the customer to wire's hosted page (QR + bank
- * deeplinks live there). Settlement is confirmed by the
- * `payment_intent.succeeded` webhook and by polling the intent status.
+ * Flow: create a PaymentIntent, confirm it (wire dispatches to an operator
+ * such as QPay), then hand the customer the `next_action` redirect URL.
+ * Settlement is confirmed by the `payment_intent.succeeded` webhook and by
+ * polling the intent status (`succeeded`).
  *
  * Runs in MOCK mode until WIRE_API_KEY is set — no real network calls, and
- * payments are settled through the dev-only mock-pay endpoint, exactly like
- * the QPay mock. Switching to real wire.mn = filling the env vars.
+ * payments are settled through the dev-only mock-pay endpoint. Switching to
+ * real wire.mn = filling the env vars.
  */
 @Injectable()
 export class WireService {
@@ -56,12 +65,33 @@ export class WireService {
 
   private get baseUrl(): string {
     return this.config
-      .get<string>('WIRE_BASE_URL', 'https://api.wire.mn/v1')
+      .get<string>('WIRE_BASE_URL', 'https://api.wirepayment.mn/v1')
       .replace(/\/$/, '');
   }
 
   private get apiKey(): string {
     return this.config.get<string>('WIRE_API_KEY', '');
+  }
+
+  /** Source IPs wire.mn sends webhooks from; empty env disables the check. */
+  private get allowedIps(): string[] {
+    return this.config
+      .get<string>('WIRE_WEBHOOK_IP', '65.109.117.186')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  /** Rejects webhook deliveries from any IP other than wire.mn's. */
+  assertAllowedIp(ip: string | undefined): void {
+    const allowed = this.allowedIps;
+    if (allowed.length === 0) return; // check disabled (e.g. local dev)
+    // Express reports IPv4 over IPv6 as "::ffff:1.2.3.4" — strip the prefix.
+    const normalized = (ip ?? '').replace(/^::ffff:/, '');
+    if (!allowed.includes(normalized)) {
+      this.logger.warn(`wire webhook from disallowed ip: ${ip}`);
+      throw new ForbiddenException('Webhook эх сурвалж зөвшөөрөгдөөгүй');
+    }
   }
 
   // -------------------------------------------------------------- checkout
@@ -87,30 +117,40 @@ export class WireService {
       };
     }
 
-    // 1. PaymentIntent — amount is in minor units (×100), unlike QPay.
-    const intent = await this.request<{ id: string }>(
+    // 1. Create the intent. amount is whole MNT ₮ (wire routes to QPay/bank
+    //    operators, which all work in whole tögrög). metadata keeps our id.
+    const intent = await this.request<WirePaymentIntent>(
       'POST',
       '/payment_intents',
       {
-        amount: params.amount * 100,
+        amount: params.amount,
         currency: 'MNT',
-        description: params.description,
-        idempotency_key: `pi-${params.paymentId}`,
+        automatic_operator: true,
+        metadata: { paymentId: params.paymentId },
       },
       `pi-${params.paymentId}`,
     );
 
-    // 2. Hosted checkout session for that intent.
-    const session = await this.request<{ url: string }>(
+    // 2. Confirm → wire dispatches to an operator and returns next_action,
+    //    which carries how the customer completes payment (a redirect URL).
+    const confirmed = await this.request<WirePaymentIntent>(
       'POST',
-      '/checkout/sessions',
-      {
-        payment_intent: intent.id,
-        success_url: params.successUrl,
-        cancel_url: params.cancelUrl,
-      },
-      `sess-${params.paymentId}`,
+      `/payment_intents/${intent.id}/confirm`,
+      { return_url: params.successUrl },
+      `confirm-${params.paymentId}`,
     );
+
+    const checkoutUrl = this.actionUrl(
+      confirmed.next_action ?? intent.next_action,
+    );
+    if (!checkoutUrl) {
+      // Nothing to redirect to — log the shape so we can map it exactly.
+      this.logger.warn(
+        `wire next_action carried no redirect url: ${JSON.stringify(
+          confirmed.next_action,
+        )}`,
+      );
+    }
 
     return {
       invoiceId: intent.id,
@@ -118,9 +158,17 @@ export class WireService {
       qrImage: null,
       urls: [],
       shortUrl: null,
-      checkoutUrl: session.url,
+      checkoutUrl,
       mock: false,
     };
+  }
+
+  /** Pulls a redirect URL out of a PaymentIntent `next_action` object. */
+  private actionUrl(next: Record<string, unknown> | null | undefined): string | null {
+    if (!next || typeof next !== 'object') return null;
+    const redirect = next.redirect_to_url as { url?: string } | undefined;
+    const nested = next.redirect as { url?: string } | undefined;
+    return redirect?.url ?? nested?.url ?? (next.url as string | undefined) ?? null;
   }
 
   // ----------------------------------------------------------------- check
@@ -130,20 +178,17 @@ export class WireService {
       return { paid: false, paidAmount: 0, transactionId: null };
     }
 
-    const intent = await this.request<{
-      status: string;
-      amount?: number;
-      amount_received?: number;
-      latest_charge?: string;
-    }>('GET', `/payment_intents/${intentId}`);
+    const intent = await this.request<WirePaymentIntent>(
+      'GET',
+      `/payment_intents/${intentId}`,
+    );
 
     const paid = intent.status === 'succeeded';
-    const minor = intent.amount_received ?? intent.amount ?? 0;
     return {
       paid,
-      // Back to whole ₮ to compare against the stored payment amount.
-      paidAmount: paid ? Math.round(minor / 100) : 0,
-      transactionId: intent.latest_charge ?? intentId,
+      // amount is whole ₮, matching the stored payment amount directly.
+      paidAmount: paid ? (intent.amount ?? 0) : 0,
+      transactionId: intentId,
     };
   }
 

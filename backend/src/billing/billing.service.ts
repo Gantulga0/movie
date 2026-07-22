@@ -247,12 +247,20 @@ export class BillingService {
    * payment once wire confirms the intent succeeded. Signature failures throw
    * so wire retries; unknown/duplicate events are acknowledged quietly.
    */
-  async handleWireWebhook(rawBody: Buffer, signature: string | undefined) {
+  async handleWireWebhook(
+    rawBody: Buffer,
+    signature: string | undefined,
+    clientIp?: string,
+  ) {
+    // Defence in depth: only wire.mn's IP, then a valid signature.
+    this.wire.assertAllowedIp(clientIp);
     const event = this.wire.verifyWebhook(rawBody, signature);
     if (event.type !== 'payment_intent.succeeded') {
       return { received: true };
     }
-    const intentId = (event.data?.object?.id as string | undefined) ?? undefined;
+    // The affected resource may sit directly on `data` or under `data.object`.
+    const resource = event.data?.object ?? event.data;
+    const intentId = (resource?.id as string | undefined) ?? undefined;
     if (!intentId) return { received: true };
 
     const payment = await this.prisma.payment.findFirst({
