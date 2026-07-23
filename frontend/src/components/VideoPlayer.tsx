@@ -78,6 +78,10 @@ export function VideoPlayer({
   const [buffering, setBuffering] = useState(false);
   const [visible, setVisible] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Fallback "fullscreen" for browsers where the Fullscreen API can't own an
+  // element (iPhone Safari) — the player already fills the viewport, so this
+  // just keeps our overlay on top instead of handing off to the native player.
+  const [cssFs, setCssFs] = useState(false);
   const [menu, setMenu] = useState<null | "quality" | "cc">(null);
   const [ccIndex, setCcIndex] = useState(-1); // -1 = off
   const [scrubbing, setScrubbing] = useState(false);
@@ -240,27 +244,37 @@ export function VideoPlayer({
     const doc = document as Document & {
       webkitFullscreenElement?: Element;
       webkitExitFullscreen?: () => void;
+      webkitFullscreenEnabled?: boolean;
     };
     const node = el as HTMLDivElement & {
       webkitRequestFullscreen?: () => void;
     };
-    const video = videoRef.current as
-      | (HTMLVideoElement & { webkitEnterFullscreen?: () => void })
-      | null;
+    // Exit whatever fullscreen we're in.
     if (doc.fullscreenElement || doc.webkitFullscreenElement) {
       (doc.exitFullscreen ?? doc.webkitExitFullscreen)?.call(doc);
       return;
     }
-    if (node.requestFullscreen) {
-      node.requestFullscreen().catch(() => undefined);
-    } else if (node.webkitRequestFullscreen) {
-      node.webkitRequestFullscreen();
-    } else if (video?.webkitEnterFullscreen) {
-      // iPhone Safari: only the <video> element itself can enter fullscreen,
-      // never a wrapper <div>. Fall back to native video fullscreen there.
-      video.webkitEnterFullscreen();
+    if (cssFs) {
+      setCssFs(false);
+      return;
     }
-  }, [videoRef]);
+    // Prefer real element fullscreen — the container (and so our custom overlay
+    // with the brand watermark + controls) becomes the fullscreen element, so
+    // everything stays on screen. Only available where the Fullscreen API works
+    // on elements (desktop, Android, iPadOS).
+    if (node.requestFullscreen && document.fullscreenEnabled) {
+      node.requestFullscreen().catch(() => setCssFs(true));
+    } else if (node.webkitRequestFullscreen && doc.webkitFullscreenEnabled) {
+      node.webkitRequestFullscreen();
+    } else {
+      // iPhone Safari: the Fullscreen API can't fullscreen a <div>, and handing
+      // the raw <video> to native fullscreen (webkitEnterFullscreen) strips our
+      // overlay — that's what hid the logo. Instead stay in our own layer, which
+      // is already fixed inset-0, as a CSS fullscreen so the watermark and the
+      // custom controls remain visible.
+      setCssFs(true);
+    }
+  }, [cssFs]);
 
   const togglePip = useCallback(async () => {
     const v = videoRef.current;
@@ -317,6 +331,27 @@ export function VideoPlayer({
       document.removeEventListener("webkitfullscreenchange", onFs);
     };
   }, []);
+
+  // CSS-fullscreen fallback side effects: lock the page scroll, try (best
+  // effort) to rotate to landscape, and recompute the watermark frame once the
+  // layout settles. Everything is reverted on exit.
+  useEffect(() => {
+    if (!cssFs) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const orientation = screen.orientation as ScreenOrientation & {
+      lock?: (o: string) => Promise<void>;
+      unlock?: () => void;
+    };
+    orientation?.lock?.("landscape")?.catch(() => undefined);
+    computeFrame();
+    const raf = requestAnimationFrame(computeFrame);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      orientation?.unlock?.();
+      cancelAnimationFrame(raf);
+    };
+  }, [cssFs, computeFrame]);
 
   // Picture-in-picture state (events not typed on React's <video>).
   useEffect(() => {
@@ -422,6 +457,10 @@ export function VideoPlayer({
 
   const volumeIcon =
     muted || volume === 0 ? "mute" : volume < 0.5 ? "low" : "high";
+
+  // Either native fullscreen or our CSS fallback counts as "fullscreen" for
+  // the control's icon/label.
+  const inFullscreen = isFullscreen || cssFs;
 
   return (
     <div
@@ -782,9 +821,9 @@ export function VideoPlayer({
 
             <CtrlButton
               onClick={toggleFullscreen}
-              label={isFullscreen ? "Бүтэн дэлгэцээс гарах" : "Бүтэн дэлгэц"}
+              label={inFullscreen ? "Бүтэн дэлгэцээс гарах" : "Бүтэн дэлгэц"}
             >
-              {isFullscreen ? (
+              {inFullscreen ? (
                 <IcoFsExit size={22} />
               ) : (
                 <IcoFsEnter size={22} />

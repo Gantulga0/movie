@@ -172,15 +172,17 @@ function BrowseContent() {
         title="Ангилал"
       />
 
-      {/* Filters */}
-      <div className="mt-7 flex flex-wrap items-end gap-3">
+      {/* Filters. Mobile-first: the type switch spans full width, the filter
+          dropdowns sit in a tidy 2-up grid, and sort gets its own full-width
+          row. From lg they relax into a single inline row. */}
+      <div className="mt-7 flex flex-col gap-4">
         {/* Content type segmented control */}
         <div>
           <span className="mb-1.5 block text-[13px] font-bold text-foreground">
             Төрөл
           </span>
           <div
-            className="flex rounded-xl border border-line bg-surface p-1"
+            className="flex rounded-xl border border-line bg-surface p-1 sm:inline-flex"
             role="group"
             aria-label="Контентын төрөл"
           >
@@ -194,7 +196,7 @@ function BrowseContent() {
                 type="button"
                 onClick={() => setParam("type", opt.value)}
                 aria-pressed={type === opt.value || (!type && !opt.value)}
-                className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${
+                className={`flex-1 rounded-lg px-3.5 py-2 text-sm font-semibold transition sm:flex-none ${
                   type === opt.value || (!type && !opt.value)
                     ? "bg-foreground text-background"
                     : "text-muted hover:text-foreground"
@@ -206,61 +208,64 @@ function BrowseContent() {
           </div>
         </div>
 
-        <Select
-          label="Ангилал"
-          value={genre ?? ""}
-          onChange={(v) => setParam("genre", v || null)}
-          searchable
-          searchPlaceholder="Ангилал хайх"
-          options={[
-            { value: "", label: "Бүх ангилал" },
-            ...genres.map((g) => ({ value: g.slug, label: g.name })),
-          ]}
-          className="w-44"
-        />
-
-        {countries.length > 0 ? (
+        {/* Dropdown filters + sort */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
           <Select
-            label="Улс"
-            value={country ?? ""}
-            onChange={(v) => setParam("country", v || null)}
+            label="Ангилал"
+            value={genre ?? ""}
+            onChange={(v) => setParam("genre", v || null)}
             searchable
-            searchPlaceholder="Улс хайх"
+            searchPlaceholder="Ангилал хайх"
             options={[
-              { value: "", label: "Бүх улс" },
-              ...countries.map((c) => ({ value: c, label: c })),
+              { value: "", label: "Бүх ангилал" },
+              ...genres.map((g) => ({ value: g.slug, label: g.name })),
             ]}
-            className="w-44"
+            className="w-full lg:w-44"
           />
-        ) : null}
 
-        <Select
-          label="Он"
-          value={year ?? ""}
-          onChange={(v) => setParam("year", v || null)}
-          options={[{ value: "", label: "Бүх он" }, ...YEAR_OPTIONS]}
-          className="w-40"
-        />
+          {countries.length > 0 ? (
+            <Select
+              label="Улс"
+              value={country ?? ""}
+              onChange={(v) => setParam("country", v || null)}
+              searchable
+              searchPlaceholder="Улс хайх"
+              options={[
+                { value: "", label: "Бүх улс" },
+                ...countries.map((c) => ({ value: c, label: c })),
+              ]}
+              className="w-full lg:w-44"
+            />
+          ) : null}
 
-        <Select
-          label="Төлөв"
-          value={status ?? ""}
-          onChange={(v) => setParam("status", v || null)}
-          options={[
-            { value: "", label: "Бүх төлөв" },
-            { value: "RELEASING", label: "Одоо гарч байгаа" },
-            { value: "COMPLETED", label: "Гарч дууссан" },
-          ]}
-          className="w-44"
-        />
+          <Select
+            label="Он"
+            value={year ?? ""}
+            onChange={(v) => setParam("year", v || null)}
+            options={[{ value: "", label: "Бүх он" }, ...YEAR_OPTIONS]}
+            className="w-full lg:w-40"
+          />
 
-        <Select
-          label="Эрэмбэ"
-          value={sort}
-          onChange={(v) => setParam("sort", v === "new" ? null : v)}
-          options={SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-          className="ml-auto w-48"
-        />
+          <Select
+            label="Төлөв"
+            value={status ?? ""}
+            onChange={(v) => setParam("status", v || null)}
+            options={[
+              { value: "", label: "Бүх төлөв" },
+              { value: "RELEASING", label: "Одоо гарч байгаа" },
+              { value: "COMPLETED", label: "Гарч дууссан" },
+            ]}
+            className="w-full lg:w-44"
+          />
+
+          <Select
+            label="Эрэмбэ"
+            value={sort}
+            onChange={(v) => setParam("sort", v === "new" ? null : v)}
+            options={SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            className="w-full sm:col-span-2 lg:col-span-1 lg:ml-auto lg:w-48"
+          />
+        </div>
       </div>
 
       {/* Active filters */}
