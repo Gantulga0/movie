@@ -36,6 +36,9 @@ export function Select({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlighted, setHighlighted] = useState(0);
+  // Open the panel upward when there isn't room below the trigger — otherwise a
+  // long list on a low trigger runs off the bottom of the screen on mobile.
+  const [dropUp, setDropUp] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -55,6 +58,11 @@ export function Select({
     setSearch("");
     const idx = options.findIndex((o) => o.value === value);
     setHighlighted(idx >= 0 ? idx : 0);
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setDropUp(spaceBelow < 300 && rect.top > spaceBelow);
+    }
     setOpen(true);
   }
 
@@ -78,10 +86,13 @@ export function Select({
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
 
-  // Focus lands in the panel once it opens.
+  // Focus lands in the panel once it opens. On touch devices, skip focusing the
+  // search input — the on-screen keyboard would otherwise pop up and cover the
+  // options list, making it feel like you "can't scroll down" to the choices.
   useEffect(() => {
     if (!open) return;
-    (searchable ? searchRef.current : panelRef.current)?.focus();
+    const coarse = window.matchMedia?.("(pointer: coarse)").matches;
+    (searchable && !coarse ? searchRef.current : panelRef.current)?.focus();
   }, [open, searchable]);
 
   // Keep the highlighted option visible while navigating with arrows.
@@ -148,7 +159,9 @@ export function Select({
           ref={panelRef}
           tabIndex={-1}
           onKeyDown={onPanelKeyDown}
-          className="animate-dropdown absolute left-0 top-full z-50 mt-2 w-full min-w-[13rem] overflow-hidden rounded-2xl border border-line bg-surface-raised shadow-card outline-none"
+          className={`animate-dropdown absolute left-0 z-50 w-full min-w-[13rem] overflow-hidden rounded-2xl border border-line bg-surface-raised shadow-card outline-none ${
+            dropUp ? "bottom-full mb-2" : "top-full mt-2"
+          }`}
         >
           {searchable ? (
             <div className="px-2.5 pt-2.5">
@@ -177,7 +190,7 @@ export function Select({
             id={listboxId}
             role="listbox"
             aria-label={label}
-            className="max-h-64 overflow-y-auto p-1.5"
+            className="max-h-[min(16rem,50vh)] overflow-y-auto overscroll-contain p-1.5 [-webkit-overflow-scrolling:touch]"
           >
             {filtered.length === 0 ? (
               <li className="px-3 py-6 text-center text-sm text-muted">

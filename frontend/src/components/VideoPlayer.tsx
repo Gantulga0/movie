@@ -258,20 +258,21 @@ export function VideoPlayer({
       setCssFs(false);
       return;
     }
-    // Prefer real element fullscreen — the container (and so our custom overlay
-    // with the brand watermark + controls) becomes the fullscreen element, so
-    // everything stays on screen. Only available where the Fullscreen API works
-    // on elements (desktop, Android, iPadOS).
-    if (node.requestFullscreen && document.fullscreenEnabled) {
+    // Fullscreen the CONTAINER (never the raw <video>) so our custom overlay —
+    // the brand watermark and controls — stays on screen. Try the real
+    // Fullscreen API first; whenever it's unavailable or rejects (iPhone
+    // Safari can't fullscreen a <div>), fall back to a CSS fullscreen: the
+    // player is already fixed inset-0, so it just stays our own full-viewport
+    // layer with the logo intact instead of handing off to the native player.
+    if (node.requestFullscreen) {
       node.requestFullscreen().catch(() => setCssFs(true));
-    } else if (node.webkitRequestFullscreen && doc.webkitFullscreenEnabled) {
-      node.webkitRequestFullscreen();
+    } else if (node.webkitRequestFullscreen) {
+      try {
+        node.webkitRequestFullscreen();
+      } catch {
+        setCssFs(true);
+      }
     } else {
-      // iPhone Safari: the Fullscreen API can't fullscreen a <div>, and handing
-      // the raw <video> to native fullscreen (webkitEnterFullscreen) strips our
-      // overlay — that's what hid the logo. Instead stay in our own layer, which
-      // is already fixed inset-0, as a CSS fullscreen so the watermark and the
-      // custom controls remain visible.
       setCssFs(true);
     }
   }, [cssFs]);
