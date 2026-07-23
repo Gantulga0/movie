@@ -186,6 +186,10 @@ export function VideoPlayer({
   // Seek target applied on the next loadedmetadata (resume, or quality switch).
   const seekTargetRef = useRef<number | null>(resumeAt > 0 ? resumeAt : null);
   const wasPlayingRef = useRef(true);
+  // The viewer's intent. iOS unloads backgrounded media and reloads it with the
+  // `autoPlay` attribute on return — which would resume a video the viewer had
+  // paused. We track intent and re-assert a pause after any such reload.
+  const userPausedRef = useRef(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Latest values for the idle timer's stale-closure-free reads.
@@ -226,9 +230,11 @@ export function VideoPlayer({
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) {
+      userPausedRef.current = false;
       v.play().catch(() => undefined);
       setRipple({ key: Date.now(), kind: "play" });
     } else {
+      userPausedRef.current = true;
       v.pause();
       setRipple({ key: Date.now(), kind: "pause" });
     }
@@ -401,6 +407,19 @@ export function VideoPlayer({
     };
   }, [videoRef, activeIndex]);
 
+  // Backup for the loadedmetadata guard: if the tab returns and the video is
+  // playing despite the viewer having paused it, re-pause.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "visible" || !userPausedRef.current) return;
+      const v = videoRef.current;
+      if (v && !v.paused) v.pause();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [videoRef]);
+
+
   // --------------------------------------------------------- keyboard shortcuts
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -562,8 +581,9 @@ export function VideoPlayer({
           }
           seekTargetRef.current = null;
           // `autoPlay` handles resuming; only override when it was paused
-          // before a quality swap (avoids racing play() against the load).
-          if (!wasPlayingRef.current) v.pause();
+          // before a quality swap, or when the viewer had paused before iOS
+          // reloaded the backgrounded media (don't let autoPlay override intent).
+          if (!wasPlayingRef.current || userPausedRef.current) v.pause();
           // Re-apply the active subtitle after a source swap.
           if (ccIndex >= 0) {
             Array.from(v.textTracks).forEach((track, i) => {
@@ -615,6 +635,24 @@ export function VideoPlayer({
           INFINITE
         </span>
       </div>
+
+      {/* Episode-change flash — keyed by the episode id so it replays on switch
+          (and once on open), no state needed. */}
+      {hasEpisodes && curIdx >= 0 ? (
+        <div
+          key={currentEpisodeId}
+          className="player-ep-flash pointer-events-none absolute inset-0 z-40 grid place-items-center bg-black/65"
+        >
+          <div className="flex flex-col items-center gap-1.5 text-center">
+            <span className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
+              Улирал {epList[curIdx].seasonNumber} · Анги {epList[curIdx].number}
+            </span>
+            <span className="max-w-[80vw] truncate px-4 text-xl font-bold text-white">
+              {epList[curIdx].title}
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       {/* Buffering ring */}
       {buffering ? (

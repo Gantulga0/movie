@@ -500,6 +500,29 @@ summary,
   animation: player-menu 0.14s ease-out;
 }
 
+/* Episode-change flash: dims in, holds the title, fades out. Ends invisible. */
+@keyframes player-ep-flash {
+  0% {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+  18% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+.player-ep-flash {
+  animation: player-ep-flash 0.85s ease-out forwards;
+}
+
 /* Volume slider: indigo fill to the thumb, luminous white knob. */
 .player-range {
   -webkit-appearance: none;
@@ -549,6 +572,10 @@ summary,
   .player-ripple,
   .player-menu {
     animation: none;
+  }
+  /* No flash for reduced-motion — hide it so it can't sit over the video. */
+  .player-ep-flash {
+    display: none;
   }
 }
 

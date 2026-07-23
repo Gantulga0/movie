@@ -7,7 +7,12 @@ import {
   formatDuration,
   watchedPercent,
 } from "@/lib/format";
-import { IconPlay, IconRotateCcw, IconX } from "@/components/ui/icons";
+import {
+  IconCheckCircle,
+  IconPlay,
+  IconRotateCcw,
+  IconX,
+} from "@/components/ui/icons";
 
 interface ContinueWatchingCardProps {
   item: HistoryItem;
@@ -60,6 +65,13 @@ export function ContinueWatchingCard({ item, onRemove }: ContinueWatchingCardPro
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-background-deep/85 via-transparent to-transparent" />
 
+          {/* Watched badge */}
+          {item.completed ? (
+            <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-background-deep/80 px-2 py-0.5 text-[10px] font-bold text-accent backdrop-blur-sm">
+              <IconCheckCircle size={12} /> Үзсэн
+            </span>
+          ) : null}
+
           {/* Center play affordance */}
           <span className="absolute inset-0 grid place-items-center opacity-0 transition group-hover:opacity-100">
             <span className="grid h-12 w-12 place-items-center rounded-full bg-foreground/90 text-background shadow-pop">
@@ -70,8 +82,12 @@ export function ContinueWatchingCard({ item, onRemove }: ContinueWatchingCardPro
           {/* Position + progress */}
           <div className="absolute inset-x-0 bottom-0 px-3 pb-2">
             <div className="flex items-end justify-between gap-2 text-[11px] font-semibold text-foreground/90">
-              <span>{formatTimestamp(item.progressSec)} хүртэл үзсэн</span>
-              {remainingSec ? (
+              <span>
+                {item.completed
+                  ? "Үзэж дууссан"
+                  : `${formatTimestamp(item.progressSec)} хүртэл үзсэн`}
+              </span>
+              {!item.completed && remainingSec ? (
                 <span className="text-foreground/60">
                   {formatDuration(remainingSec)} үлдсэн
                 </span>

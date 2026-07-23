@@ -22,6 +22,7 @@ function Player() {
 
   const [sources, setSources] = useState<WatchSources | null>(null);
   const [detail, setDetail] = useState<ContentDetail | null>(null);
+  const [detailLoaded, setDetailLoaded] = useState(false);
   const [error, setError] = useState<"subscription" | "rental" | "generic" | null>(
     null,
   );
@@ -33,7 +34,11 @@ function Player() {
   // series redirect. No video URLs here — those come per-episode from `watch`.
   useEffect(() => {
     if (!id) return;
-    contentApi.get(id).then(setDetail).catch(() => setDetail(null));
+    contentApi
+      .get(id)
+      .then(setDetail)
+      .catch(() => setDetail(null))
+      .finally(() => setDetailLoaded(true));
   }, [id]);
 
   // Flattened, ordered episode list for a series.
@@ -278,6 +283,18 @@ function Player() {
   const playable = sources.videoAssets.filter((a) => a.url);
 
   if (playable.length === 0) {
+    // Might be a series awaiting its first-episode redirect, or the detail is
+    // still loading — show a spinner instead of flashing "no video" first.
+    if (!detailLoaded || willRedirect) {
+      return (
+        <Shell>
+          <div
+            aria-label="Ачаалж байна"
+            className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-accent"
+          />
+        </Shell>
+      );
+    }
     return (
       <Shell>
         <div className="max-w-md text-center">
@@ -287,7 +304,7 @@ function Player() {
           <Button
             variant="outline"
             className="mt-4"
-            onClick={() => router.back()}
+            onClick={() => router.push("/home")}
           >
             Буцах
           </Button>
@@ -305,7 +322,7 @@ function Player() {
       onSelectEpisode={selectEpisode}
       resolveEpisodeSource={resolveEpisodeSource}
       posterFallback={detail?.backdropUrl ?? detail?.posterUrl ?? null}
-      onBack={() => router.back()}
+      onBack={() => router.push("/home")}
       onPause={() => saveProgress()}
       onEnded={() => saveProgress(true)}
       sources={playable.map((a) => ({
