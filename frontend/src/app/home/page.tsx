@@ -89,24 +89,28 @@ function HomeContent() {
     [token],
   );
 
-  // One row per title — the latest session wins. Titles watched to the end
-  // stay in the rail too (completed shows regardless of the 30s warm-up guard),
-  // so nothing silently disappears once finished.
+  // One card per watched *episode* (a movie is its own single entry), newest
+  // first. Each episode of a series stays in the rail — watch ep1 then ep2 and
+  // both show. Completed items stay too (past the 30s warm-up guard).
   const continueWatching = useMemo(() => {
     const seen = new Set<string>();
     const rows: HistoryItem[] = [];
     for (const row of history) {
       if (row.progressSec < 30 && !row.completed) continue;
-      if (seen.has(row.content.id)) continue;
-      seen.add(row.content.id);
+      const key = `${row.content.id}:${row.episode?.id ?? ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       rows.push(row);
     }
-    return rows.slice(0, 12);
+    return rows.slice(0, 20);
   }, [history]);
 
+  // Progress badge for the *poster* cards elsewhere on the page: one value per
+  // title, the most recently watched episode (rows are newest-first).
   const progressByContent = useMemo(() => {
     const map = new Map<string, number>();
     for (const row of continueWatching) {
+      if (map.has(row.content.id)) continue;
       const duration = row.episode?.durationSec ?? row.content.durationSec;
       const pct = watchedPercent(row.progressSec, duration);
       if (pct != null) map.set(row.content.id, pct);
@@ -207,6 +211,36 @@ function HomeHero({
   }, [token, featured]);
 
   const hero = featured[index];
+
+  // A series has no content-level video, so the hero "Watch" button must point
+  // at its first episode. Fetch it for the active series slide (cached per id).
+  const [firstEpisode, setFirstEpisode] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!hero || hero.type !== "SERIES" || firstEpisode[hero.id] !== undefined) {
+      return;
+    }
+    let cancelled = false;
+    contentApi
+      .get(hero.slug)
+      .then((d) => {
+        if (cancelled) return;
+        const first = d.seasons[0]?.episodes[0];
+        setFirstEpisode((m) => ({ ...m, [hero.id]: first?.id ?? "" }));
+      })
+      .catch(() => {
+        if (!cancelled) setFirstEpisode((m) => ({ ...m, [hero.id]: "" }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hero, firstEpisode]);
+
+  const heroEp = hero ? firstEpisode[hero.id] : undefined;
+  const watchHref = hero
+    ? hero.type === "SERIES" && heroEp
+      ? `/watch/${hero.id}?episodeId=${heroEp}`
+      : `/watch/${hero.id}`
+    : "#";
 
   async function toggleList(content: Content) {
     if (!token) return;
@@ -345,7 +379,7 @@ function HomeHero({
         ) : null}
 
         <div className="mt-6 flex flex-wrap items-center gap-2.5">
-          <ButtonLink href={`/watch/${hero.id}`} variant="primary" size="lg">
+          <ButtonLink href={watchHref} variant="primary" size="lg">
             <IconPlay size={18} />
             Үзэх
           </ButtonLink>
