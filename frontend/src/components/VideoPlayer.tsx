@@ -79,13 +79,11 @@ export function VideoPlayer({
   const [visible, setVisible] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Our own (non-native) fullscreen mode. On iPhone the browser can't fullscreen
-  // a <div>, so instead of handing off to Apple's native video player (which
-  // strips the logo overlay) we run our own layer and, in portrait, rotate it to
-  // landscape via CSS so the video fills the screen with the watermark intact.
+  // a <div> and handing off to Apple's native player strips our logo overlay, so
+  // we just fill the viewport (fixed inset-0) and keep our own controls. The
+  // viewer rotates the phone to landscape for a big picture, exactly like the
+  // native player — no CSS rotation (that left the Safari chrome on screen).
   const [fsActive, setFsActive] = useState(false);
-  // Whether the device is held portrait — drives the CSS landscape rotation of
-  // our custom fullscreen.
-  const [isPortrait, setIsPortrait] = useState(false);
   const [menu, setMenu] = useState<null | "quality" | "cc">(null);
   const [ccIndex, setCcIndex] = useState(-1); // -1 = off
   const [scrubbing, setScrubbing] = useState(false);
@@ -353,19 +351,8 @@ export function VideoPlayer({
     return () => orientation?.unlock?.();
   }, [isFullscreen]);
 
-  // Track portrait vs landscape so the custom fullscreen can rotate only when
-  // the phone is actually held portrait.
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(orientation: portrait)");
-    const update = () => setIsPortrait(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-
   // Our custom fullscreen: lock the page scroll behind the player and recompute
-  // the watermark frame once the (possibly rotated) layout has settled.
+  // the watermark frame once the layout has settled.
   useEffect(() => {
     if (!fsActive) return;
     const prev = document.body.style.overflow;
@@ -378,12 +365,12 @@ export function VideoPlayer({
     };
   }, [fsActive, computeFrame]);
 
-  // Recompute the watermark frame whenever the rotation state flips.
+  // Recompute the watermark frame whenever the fullscreen state flips.
   useEffect(() => {
     computeFrame();
     const raf = requestAnimationFrame(computeFrame);
     return () => cancelAnimationFrame(raf);
-  }, [fsActive, isPortrait, isFullscreen, computeFrame]);
+  }, [fsActive, isFullscreen, computeFrame]);
 
   // Picture-in-picture state (events not typed on React's <video>).
   useEffect(() => {
@@ -492,11 +479,6 @@ export function VideoPlayer({
 
   // "In fullscreen" for the icon = real element fullscreen OR our custom mode.
   const inFullscreen = isFullscreen || fsActive;
-  // Custom (CSS) fullscreen without a real one behind it, on a portrait-held
-  // phone → rotate the whole player 90° so the video fills the screen as
-  // landscape while the logo/controls overlay stays intact. Rotating the phone
-  // to landscape drops the transform (layout is already correct there).
-  const rotateFs = fsActive && !isFullscreen && isPortrait;
 
   return (
     <div
@@ -504,19 +486,9 @@ export function VideoPlayer({
       onMouseMove={revealControls}
       onTouchStart={revealControls}
       onClick={() => menu && setMenu(null)}
-      className={`fixed left-0 top-0 h-full w-full select-none overflow-hidden bg-black ${
+      className={`fixed inset-0 select-none overflow-hidden bg-black ${
         !visible && playing ? "cursor-none" : ""
       }`}
-      style={
-        rotateFs
-          ? {
-              width: "100vh",
-              height: "100vw",
-              transform: "translateX(100vw) rotate(90deg)",
-              transformOrigin: "top left",
-            }
-          : undefined
-      }
     >
       {/* Video */}
       <video

@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -29,8 +29,7 @@ async function bootstrap() {
 
   const port = config.get<number>('PORT', 4000);
   await app.listen(port);
-  // eslint-disable-next-line no-console
-  console.log(`🚀 API running on http://localhost:${port}/api`);
+  Logger.log(`API running on port ${port} (prefix /api)`, 'Bootstrap');
 
   // Render free tier spins the service down after 15 min of no traffic;
   // self-ping every 10 min keeps it awake. RENDER_EXTERNAL_URL is set by Render.
