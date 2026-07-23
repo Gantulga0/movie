@@ -31,6 +31,7 @@ export default function LoginPage() {
   function validate() {
     const next: typeof errors = {};
     if (!identifier.trim()) next.identifier = "Утасны дугаараа оруулна уу.";
+    else if (!/^\d{8}$/.test(identifier)) next.identifier = "Утасны дугаар яг 8 оронтой байх ёстой.";
     if (!password) next.password = "Нууц үгээ оруулна уу.";
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -91,10 +92,12 @@ export default function LoginPage() {
           label="Утасны дугаар"
           name="identifier"
           type="tel"
+          inputMode="numeric"
           autoComplete="tel"
+          maxLength={8}
           placeholder="99xxxxxx"
           value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
+          onChange={(e) => setIdentifier(e.target.value.replace(/\D/g, "").slice(0, 8))}
           error={errors.identifier}
         />
 

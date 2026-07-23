@@ -53,11 +53,13 @@ function BrowseContent() {
 
   const type = params.get("type");
   const genre = params.get("genre");
+  const country = params.get("country");
   const year = params.get("year");
   const status = params.get("status");
   const sort = (params.get("sort") as ContentSort | null) ?? "new";
 
   const [genres, setGenres] = useState<Genre[]>([]);
+  const [countries, setCountries] = useState<string[]>([]);
   const [items, setItems] = useState<Content[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -66,6 +68,7 @@ function BrowseContent() {
 
   useEffect(() => {
     contentApi.genres().then(setGenres).catch(() => setGenres([]));
+    contentApi.countries().then(setCountries).catch(() => setCountries([]));
   }, []);
 
   // URL params are the single source of truth for every filter.
@@ -73,6 +76,7 @@ function BrowseContent() {
     const q: ContentListParams = { sort, limit: PAGE_SIZE };
     if (type === "MOVIE" || type === "SERIES") q.type = type;
     if (genre) q.genre = genre;
+    if (country) q.country = country;
     if (status === "RELEASING" || status === "COMPLETED")
       q.releaseStatus = status as ReleaseStatus;
     if (year) {
@@ -85,7 +89,7 @@ function BrowseContent() {
       }
     }
     return q;
-  }, [type, genre, year, status, sort]);
+  }, [type, genre, country, year, status, sort]);
 
   // New filters → fresh first page.
   useEffect(() => {
@@ -144,6 +148,7 @@ function BrowseContent() {
     const g = genres.find((x) => x.slug === genre);
     activeFilters.push({ key: "genre", label: g?.name ?? genre });
   }
+  if (country) activeFilters.push({ key: "country", label: country });
   if (year) {
     const y = YEAR_OPTIONS.find((o) => o.value === year);
     activeFilters.push({ key: "year", label: y?.label ?? year });
@@ -213,6 +218,21 @@ function BrowseContent() {
           ]}
           className="w-44"
         />
+
+        {countries.length > 0 ? (
+          <Select
+            label="Улс"
+            value={country ?? ""}
+            onChange={(v) => setParam("country", v || null)}
+            searchable
+            searchPlaceholder="Улс хайх"
+            options={[
+              { value: "", label: "Бүх улс" },
+              ...countries.map((c) => ({ value: c, label: c })),
+            ]}
+            className="w-44"
+          />
+        ) : null}
 
         <Select
           label="Он"

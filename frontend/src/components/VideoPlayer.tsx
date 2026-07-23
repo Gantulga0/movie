@@ -105,15 +105,39 @@ export function VideoPlayer({
 
   useEffect(() => {
     computeFrame();
-    window.addEventListener("resize", computeFrame);
-    document.addEventListener("fullscreenchange", computeFrame);
-    document.addEventListener("webkitfullscreenchange", computeFrame);
-    return () => {
-      window.removeEventListener("resize", computeFrame);
-      document.removeEventListener("fullscreenchange", computeFrame);
-      document.removeEventListener("webkitfullscreenchange", computeFrame);
+    const v = videoRef.current;
+
+    // Entering fullscreen — on mobile this also rotates to landscape — fires
+    // `fullscreenchange` *before* the <video> box has resized, so a synchronous
+    // read still sees the old windowed dimensions and the watermark frame
+    // collapses (logo disappears). Recompute once now and again after the
+    // browser has settled the new layout.
+    const recompute = () => {
+      computeFrame();
+      requestAnimationFrame(computeFrame);
     };
-  }, [computeFrame, activeIndex]);
+
+    // A ResizeObserver on the <video> is the reliable trigger: it always fires
+    // with the correct post-layout box size for every resize — fullscreen,
+    // orientation change, and window resize alike.
+    let ro: ResizeObserver | null = null;
+    if (v && typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => computeFrame());
+      ro.observe(v);
+    }
+
+    window.addEventListener("resize", recompute);
+    window.addEventListener("orientationchange", recompute);
+    document.addEventListener("fullscreenchange", recompute);
+    document.addEventListener("webkitfullscreenchange", recompute);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", recompute);
+      window.removeEventListener("orientationchange", recompute);
+      document.removeEventListener("fullscreenchange", recompute);
+      document.removeEventListener("webkitfullscreenchange", recompute);
+    };
+  }, [computeFrame, activeIndex, videoRef]);
 
   // Seek target applied on the next loadedmetadata (resume, or quality switch).
   const seekTargetRef = useRef<number | null>(resumeAt > 0 ? resumeAt : null);

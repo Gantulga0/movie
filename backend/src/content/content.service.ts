@@ -64,6 +64,7 @@ export class ContentService {
     if (query.genre) {
       where.genres = { some: { genre: { slug: query.genre } } };
     }
+    if (query.country) where.country = query.country;
     if (query.search) {
       // Match either the localized or the original title.
       where.OR = [
@@ -305,6 +306,19 @@ export class ContentService {
 
   listGenres() {
     return this.prisma.genre.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  /** Distinct countries across published titles — powers the country filter. */
+  async listCountries() {
+    const rows = await this.prisma.content.findMany({
+      where: { status: ContentStatus.PUBLISHED, country: { not: null } },
+      select: { country: true },
+      distinct: ['country'],
+      orderBy: { country: 'asc' },
+    });
+    return rows
+      .map((r) => r.country)
+      .filter((c): c is string => Boolean(c && c.trim()));
   }
 
   // ----------------------------------------------------------------- admin

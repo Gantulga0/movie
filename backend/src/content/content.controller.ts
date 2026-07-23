@@ -40,6 +40,12 @@ export class ContentController {
     return this.content.listGenres();
   }
 
+  /** Distinct countries for the browse-page country filter. */
+  @Get('countries')
+  countries() {
+    return this.content.listCountries();
+  }
+
   // Admin: everything, including drafts.
   @Get('admin/all')
   @UseGuards(JwtAuthGuard, RolesGuard)

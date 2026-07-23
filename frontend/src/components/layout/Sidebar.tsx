@@ -158,8 +158,14 @@ export function Sidebar({ expanded, onToggle, onProfile }: SidebarProps) {
         </Link>
       </div>
 
-      {/* Main items */}
-      <div className="flex flex-1 flex-col gap-1 overflow-hidden px-3 py-2">
+      {/* Main items. Clip long labels only while expanded; when collapsed the
+          container must stay overflow-visible so the hover tooltips (which sit
+          at left-full, outside the 72px rail) aren't clipped away. */}
+      <div
+        className={`flex flex-1 flex-col gap-1 px-3 py-2 ${
+          expanded ? "overflow-hidden" : "overflow-visible"
+        }`}
+      >
         {expanded ? (
           <p className="sidebar-label mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.28em] text-muted/70">
             Цэс

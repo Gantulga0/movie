@@ -173,6 +173,7 @@ export const authApi = {
 export interface ContentListParams {
   type?: "MOVIE" | "SERIES";
   genre?: string;
+  country?: string;
   search?: string;
   featured?: boolean;
   year?: number;
@@ -200,6 +201,9 @@ export const contentApi = {
 
   genres: () =>
     apiFetch<Genre[]>("/content/genres", { cacheTtlMs: CATALOG_TTL_MS }),
+
+  countries: () =>
+    apiFetch<string[]>("/content/countries", { cacheTtlMs: CATALOG_TTL_MS }),
 
   related: (idOrSlug: string) =>
     apiFetch<Content[]>(`/content/${idOrSlug}/related`, {

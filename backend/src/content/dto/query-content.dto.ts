@@ -24,6 +24,11 @@ export class QueryContentDto {
   @IsString()
   genre?: string;
 
+  /** Country of origin (exact match on Content.country). */
+  @IsOptional()
+  @IsString()
+  country?: string;
+
   @IsOptional()
   @IsString()
   search?: string;
