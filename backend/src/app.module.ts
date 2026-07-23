@@ -8,6 +8,7 @@ import { UsersModule } from './users/users.module';
 import { ContentModule } from './content/content.module';
 import { ActivityModule } from './activity/activity.module';
 import { BillingModule } from './billing/billing.module';
+import { PhoneVerifyModule } from './phone-verify/phone-verify.module';
 import { AdminModule } from './admin/admin.module';
 import { StorageModule } from './storage/storage.module';
 import { HealthController } from './health.controller';
@@ -23,6 +24,7 @@ import { HealthController } from './health.controller';
     ContentModule,
     ActivityModule,
     BillingModule,
+    PhoneVerifyModule,
     AdminModule,
     StorageModule,
   ],

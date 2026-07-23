@@ -86,6 +86,39 @@ model Otp {
   @@index([target, purpose])
 }
 
+enum PhoneVerificationStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+}
+
+/// A verify.mn Mobile-Originated (MO) SMS verification session. Unlike the
+/// `Otp` flow (we send the code), here the *user* texts a per-session code to
+/// shortcode 144773; verify.mn confirms receipt and we poll (or get a callback)
+/// until VERIFIED. One row per verify.mn session, keyed by its sessionId.
+model PhoneVerification {
+  id        String @id @default(uuid())
+  // verify.mn session id — the handle we poll and that the callback carries.
+  sessionId String @unique
+  phone     String
+  // The 4-6 digit numeric code the user must SMS; unique per session, never
+  // reused. Stored in clear only for support/debugging — it is not a secret
+  // (verify.mn, not us, matches the inbound SMS against it).
+  code   String
+  status PhoneVerificationStatus @default(PENDING)
+  // Optional id of the user/order record this verification belongs to.
+  userId String?
+
+  verifiedAt DateTime?
+  // verify.mn TTL (~300s). Past this without VERIFIED = failure.
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+  @@index([userId])
+}
+
 // ---------------------------------------------------------------------------
 // Catalog: movies, series, episodes
 // ---------------------------------------------------------------------------
