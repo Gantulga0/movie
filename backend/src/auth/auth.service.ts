@@ -64,24 +64,34 @@ export class AuthService {
    * `verifyStatus`; a token is only issued once the SMS is confirmed.
    */
   async register(dto: RegisterDto): Promise<PendingVerification> {
-    const [phoneTaken, emailTaken] = await Promise.all([
-      this.users.findByPhone(dto.phone),
-      dto.email ? this.users.findByEmail(dto.email) : null,
-    ]);
-    if (phoneTaken) {
+    const existing = await this.users.findByPhone(dto.phone);
+    // Only a *verified* account blocks the number. An unverified one means a
+    // previous signup was never confirmed, so we let this attempt take it over
+    // (below) instead of dead-ending the user on "already registered".
+    if (existing?.verified) {
       throw new ConflictException('Энэ утасны дугаар аль хэдийн бүртгэлтэй байна');
     }
-    if (emailTaken) {
-      throw new ConflictException('Энэ имэйл аль хэдийн бүртгэлтэй байна');
+
+    if (dto.email) {
+      const emailOwner = await this.users.findByEmail(dto.email);
+      if (emailOwner && emailOwner.id !== existing?.id && emailOwner.verified) {
+        throw new ConflictException('Энэ имэйл аль хэдийн бүртгэлтэй байна');
+      }
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    const user = await this.users.create({
-      name: dto.name ?? null,
-      phone: dto.phone,
-      email: dto.email ?? null,
-      passwordHash,
-    });
+    const user = existing
+      ? await this.users.reregister(existing.id, {
+          name: dto.name ?? null,
+          email: dto.email ?? null,
+          passwordHash,
+        })
+      : await this.users.create({
+          name: dto.name ?? null,
+          phone: dto.phone,
+          email: dto.email ?? null,
+          passwordHash,
+        });
 
     const verification = await this.phoneVerification.start(user.phone, {
       userId: user.id,

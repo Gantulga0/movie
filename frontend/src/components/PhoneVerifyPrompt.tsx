@@ -30,13 +30,9 @@ interface Props<R extends { verified: boolean; status: string }> {
  * 144773 from their own phone; we poll the backend every 3s and fire
  * `onVerified` the moment it lands. No code entry — the phone proves itself.
  */
-export function PhoneVerifyPrompt<R extends { verified: boolean; status: string }>({
-  phone,
-  session: initial,
-  poll,
-  restart,
-  onVerified,
-}: Props<R>) {
+export function PhoneVerifyPrompt<
+  R extends { verified: boolean; status: string },
+>({ phone, session: initial, poll, restart, onVerified }: Props<R>) {
   const [sess, setSess] = useState(initial);
   const [expired, setExpired] = useState(false);
   const [restarting, setRestarting] = useState(false);
@@ -132,7 +128,9 @@ export function PhoneVerifyPrompt<R extends { verified: boolean; status: string 
       <ol className="mb-5 space-y-2 text-sm text-muted">
         <li>
           1. Доорх <span className="font-semibold text-foreground">кодыг</span>{" "}
-          <span className="font-mono font-bold text-foreground">{SHORTCODE}</span>{" "}
+          <span className="font-mono font-bold text-foreground">
+            {SHORTCODE}
+          </span>{" "}
           дугаар руу мессежээр илгээнэ үү.
         </li>
         <li>2. Илгээсний дараа энэ хуудас автоматаар баталгаажна.</li>
@@ -183,7 +181,7 @@ export function PhoneVerifyPrompt<R extends { verified: boolean; status: string 
           disabled={restarting}
           className="mt-5 w-full text-sm text-muted transition hover:text-foreground disabled:opacity-60"
         >
-          {restarting ? "Авч байна…" : "Код ирсэнгүй юу? Шинэ код авах"}
+          {restarting ? "Авч байна…" : "Шинэ код авах"}
         </button>
       ) : null}
     </div>

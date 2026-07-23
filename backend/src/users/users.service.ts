@@ -71,6 +71,18 @@ export class UsersService {
     return this.prisma.user.update({ where: { id }, data: { passwordHash } });
   }
 
+  /**
+   * Overwrite an existing *unverified* account's credentials when someone
+   * re-registers with the same phone before ever confirming it. Lets a stalled
+   * signup start over instead of being told "already registered".
+   */
+  reregister(
+    id: string,
+    data: { name?: string | null; email?: string | null; passwordHash: string },
+  ): Promise<User> {
+    return this.prisma.user.update({ where: { id }, data });
+  }
+
   /** Self-service profile edits (display name, avatar). */
   async updateProfile(
     id: string,

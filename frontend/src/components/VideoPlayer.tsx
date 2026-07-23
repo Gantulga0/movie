@@ -79,11 +79,13 @@ export function VideoPlayer({
   const [visible, setVisible] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Our own (non-native) fullscreen mode. On iPhone the browser can't fullscreen
-  // a <div> and handing off to Apple's native player strips our logo overlay, so
-  // we just fill the viewport (fixed inset-0) and keep our own controls. The
-  // viewer rotates the phone to landscape for a big picture, exactly like the
-  // native player — no CSS rotation (that left the Safari chrome on screen).
+  // a <div>, and handing off to Apple's native player strips our logo overlay,
+  // so we run our own full-viewport layer (fixed inset-0, top z-index). Held in
+  // portrait we rotate it 90° to landscape via CSS so the video is big with the
+  // logo intact; rotating the phone drops the transform.
   const [fsActive, setFsActive] = useState(false);
+  // Device held portrait — drives the CSS landscape rotation of our fullscreen.
+  const [isPortrait, setIsPortrait] = useState(false);
   const [menu, setMenu] = useState<null | "quality" | "cc">(null);
   const [ccIndex, setCcIndex] = useState(-1); // -1 = off
   const [scrubbing, setScrubbing] = useState(false);
@@ -351,8 +353,19 @@ export function VideoPlayer({
     return () => orientation?.unlock?.();
   }, [isFullscreen]);
 
+  // Track portrait vs landscape so the custom fullscreen rotates only when the
+  // phone is actually held portrait.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(orientation: portrait)");
+    const update = () => setIsPortrait(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
   // Our custom fullscreen: lock the page scroll behind the player and recompute
-  // the watermark frame once the layout has settled.
+  // the watermark frame once the (possibly rotated) layout has settled.
   useEffect(() => {
     if (!fsActive) return;
     const prev = document.body.style.overflow;
@@ -365,12 +378,12 @@ export function VideoPlayer({
     };
   }, [fsActive, computeFrame]);
 
-  // Recompute the watermark frame whenever the fullscreen state flips.
+  // Recompute the watermark frame whenever the fullscreen / rotation flips.
   useEffect(() => {
     computeFrame();
     const raf = requestAnimationFrame(computeFrame);
     return () => cancelAnimationFrame(raf);
-  }, [fsActive, isFullscreen, computeFrame]);
+  }, [fsActive, isPortrait, isFullscreen, computeFrame]);
 
   // Picture-in-picture state (events not typed on React's <video>).
   useEffect(() => {
@@ -479,6 +492,13 @@ export function VideoPlayer({
 
   // "In fullscreen" for the icon = real element fullscreen OR our custom mode.
   const inFullscreen = isFullscreen || fsActive;
+  // Custom fullscreen on a portrait-held phone (no real element fullscreen
+  // available) → rotate the whole player 90° to landscape so the video is big
+  // with the logo overlay intact. dvw/dvh track the *visible* viewport (they
+  // shrink for the Safari toolbars), so the rotated box fills what's on screen
+  // instead of overflowing like static vw/vh did. Turning the phone landscape
+  // clears isPortrait and drops the transform.
+  const rotateFs = fsActive && !isFullscreen && isPortrait;
 
   return (
     <div
@@ -486,9 +506,19 @@ export function VideoPlayer({
       onMouseMove={revealControls}
       onTouchStart={revealControls}
       onClick={() => menu && setMenu(null)}
-      className={`fixed inset-0 select-none overflow-hidden bg-black ${
+      className={`fixed inset-0 z-[9999] select-none overflow-hidden bg-black ${
         !visible && playing ? "cursor-none" : ""
       }`}
+      style={
+        rotateFs
+          ? {
+              width: "100dvh",
+              height: "100dvw",
+              transform: "translateX(100dvw) rotate(90deg)",
+              transformOrigin: "top left",
+            }
+          : undefined
+      }
     >
       {/* Video */}
       <video
