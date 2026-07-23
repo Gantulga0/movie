@@ -1,12 +1,12 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { API_URL, ApiError, activityApi, contentApi } from "@/lib/api";
-import type { WatchSources } from "@/lib/types";
+import type { ContentDetail, WatchSources } from "@/lib/types";
 import { ButtonLink, Button } from "@/components/ui/Button";
-import { VideoPlayer } from "@/components/VideoPlayer";
+import { VideoPlayer, type PlayerEpisode } from "@/components/VideoPlayer";
 
 const PROGRESS_INTERVAL_MS = 10_000;
 /** Playback counts as "completed" past this share of the runtime. */
@@ -21,12 +21,64 @@ function Player() {
   const { user, token, loading: authLoading } = useAuth();
 
   const [sources, setSources] = useState<WatchSources | null>(null);
+  const [detail, setDetail] = useState<ContentDetail | null>(null);
   const [error, setError] = useState<"subscription" | "rental" | "generic" | null>(
     null,
   );
   const [resumeAt, setResumeAt] = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastSaved = useRef(0);
+
+  // Content detail (seasons/episodes) powers the in-player episode list and the
+  // series redirect. No video URLs here — those come per-episode from `watch`.
+  useEffect(() => {
+    if (!id) return;
+    contentApi.get(id).then(setDetail).catch(() => setDetail(null));
+  }, [id]);
+
+  // Flattened, ordered episode list for a series.
+  const episodes = useMemo<PlayerEpisode[]>(() => {
+    if (!detail) return [];
+    return detail.seasons.flatMap((s) =>
+      s.episodes.map((ep) => ({
+        id: ep.id,
+        number: ep.number,
+        title: ep.title,
+        seasonNumber: s.number,
+        durationSec: ep.durationSec,
+        thumbnailUrl: ep.thumbnailUrl,
+      })),
+    );
+  }, [detail]);
+
+  // A series opened without an episode (e.g. the featured "Watch" button) has no
+  // content-level video → jump to the first episode instead of dead-ending.
+  const willRedirect =
+    !episodeId && detail?.type === "SERIES" && episodes.length > 0;
+  useEffect(() => {
+    if (willRedirect) {
+      router.replace(`/watch/${id}?episodeId=${episodes[0].id}`);
+    }
+  }, [willRedirect, id, episodes, router]);
+
+  const selectEpisode = useCallback(
+    (epId: string) => router.push(`/watch/${id}?episodeId=${epId}`),
+    [id, router],
+  );
+
+  // Signed URL for an arbitrary episode, for mid-frame thumbnail capture.
+  const resolveEpisodeSource = useCallback(
+    async (epId: string): Promise<string | null> => {
+      if (!token) return null;
+      try {
+        const ws = await contentApi.watch(id, token, epId);
+        return ws.videoAssets.find((a) => a.url)?.url ?? null;
+      } catch {
+        return null;
+      }
+    },
+    [id, token],
+  );
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
@@ -141,6 +193,18 @@ function Player() {
 
   if (authLoading || !user) return null;
 
+  // Redirecting a series to its first episode — show a spinner, not "no video".
+  if (willRedirect) {
+    return (
+      <Shell>
+        <div
+          aria-label="Ачаалж байна"
+          className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-accent"
+        />
+      </Shell>
+    );
+  }
+
   if (error === "subscription") {
     return (
       <Shell>
@@ -236,6 +300,11 @@ function Player() {
     <VideoPlayer
       videoRef={videoRef}
       resumeAt={resumeAt}
+      episodes={episodes.length ? episodes : undefined}
+      currentEpisodeId={episodeId}
+      onSelectEpisode={selectEpisode}
+      resolveEpisodeSource={resolveEpisodeSource}
+      posterFallback={detail?.backdropUrl ?? detail?.posterUrl ?? null}
       onBack={() => router.back()}
       onPause={() => saveProgress()}
       onEnded={() => saveProgress(true)}

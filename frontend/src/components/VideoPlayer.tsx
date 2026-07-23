@@ -24,6 +24,15 @@ export interface PlayerSubtitle {
   label: string;
 }
 
+export interface PlayerEpisode {
+  id: string;
+  number: number;
+  title: string;
+  seasonNumber: number;
+  durationSec?: number | null;
+  thumbnailUrl?: string | null;
+}
+
 interface VideoPlayerProps {
   /** Shared with the host page so its progress/heartbeat effects keep working. */
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -32,6 +41,15 @@ interface VideoPlayerProps {
   /** Resume position in seconds (0 = start from the top). */
   resumeAt: number;
   title?: string;
+  /** Series episodes (flattened, ordered) — enables prev/next + the list panel. */
+  episodes?: PlayerEpisode[];
+  currentEpisodeId?: string;
+  /** Switch episode — the host navigates and re-feeds `sources`. */
+  onSelectEpisode?: (episodeId: string) => void;
+  /** Resolve a playable URL for an episode, for mid-frame thumbnail capture. */
+  resolveEpisodeSource?: (episodeId: string) => Promise<string | null>;
+  /** Backdrop/poster used when an episode has no thumbnail and capture fails. */
+  posterFallback?: string | null;
   onBack: () => void;
   onPause?: () => void;
   onEnded?: () => void;
@@ -62,11 +80,34 @@ export function VideoPlayer({
   subtitles,
   resumeAt,
   title,
+  episodes,
+  currentEpisodeId,
+  onSelectEpisode,
+  resolveEpisodeSource,
+  posterFallback,
   onBack,
   onPause,
   onEnded,
 }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [epPanel, setEpPanel] = useState(false);
+
+  // Episode navigation (series only). prevEp/nextEp drive the skip buttons.
+  const epList = useMemo(() => episodes ?? [], [episodes]);
+  const hasEpisodes = epList.length > 0 && Boolean(onSelectEpisode);
+  const curIdx = currentEpisodeId
+    ? epList.findIndex((e) => e.id === currentEpisodeId)
+    : -1;
+  const prevEp = curIdx > 0 ? epList[curIdx - 1] : null;
+  const nextEp =
+    curIdx >= 0 && curIdx < epList.length - 1 ? epList[curIdx + 1] : null;
+  const goEpisode = useCallback(
+    (id: string) => {
+      setEpPanel(false);
+      onSelectEpisode?.(id);
+    },
+    [onSelectEpisode],
+  );
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -714,6 +755,26 @@ export function VideoPlayer({
             <IcoFwd15 size={22} />
           </CtrlButton>
 
+          {/* Prev / next episode (series only) */}
+          {hasEpisodes ? (
+            <>
+              <CtrlButton
+                onClick={() => prevEp && goEpisode(prevEp.id)}
+                label="Өмнөх анги"
+                disabled={!prevEp}
+              >
+                <IcoPrevEp size={22} />
+              </CtrlButton>
+              <CtrlButton
+                onClick={() => nextEp && goEpisode(nextEp.id)}
+                label="Дараагийн анги"
+                disabled={!nextEp}
+              >
+                <IcoNextEp size={22} />
+              </CtrlButton>
+            </>
+          ) : null}
+
           {/* Volume */}
           <div className="group/vol flex items-center">
             <CtrlButton
@@ -753,6 +814,17 @@ export function VideoPlayer({
           </span>
 
           <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
+            {/* Episodes list */}
+            {hasEpisodes ? (
+              <CtrlButton
+                onClick={() => setEpPanel(true)}
+                label="Ангиуд"
+                active={epPanel}
+              >
+                <IcoList size={22} />
+              </CtrlButton>
+            ) : null}
+
             {/* Quality */}
             {sources.length > 1 ? (
               <Popover
@@ -823,6 +895,46 @@ export function VideoPlayer({
           </div>
         </div>
       </div>
+
+      {/* -------------------------------------------------- episodes panel */}
+      {hasEpisodes && epPanel ? (
+        <div className="absolute inset-0 z-40">
+          <button
+            type="button"
+            aria-label="Хаах"
+            onClick={() => setEpPanel(false)}
+            className="animate-fade absolute inset-0 bg-black/55"
+          />
+          <div className="animate-slide-left absolute right-0 top-0 flex h-full w-[min(92vw,400px)] flex-col border-l border-white/10 bg-[#0b0f1a]/95 shadow-[-8px_0_50px_rgba(0,0,0,0.65)] backdrop-blur-xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3.5">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-foreground">Ангиуд</p>
+                <p className="text-xs text-muted">{epList.length} анги</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEpPanel(false)}
+                aria-label="Хаах"
+                className="grid h-9 w-9 place-items-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white active:scale-90"
+              >
+                <IcoClose size={20} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-2">
+              {epList.map((ep) => (
+                <EpisodeRow
+                  key={ep.id}
+                  episode={ep}
+                  active={ep.id === currentEpisodeId}
+                  onSelect={() => goEpisode(ep.id)}
+                  resolveSource={resolveEpisodeSource}
+                  fallback={posterFallback}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -834,19 +946,22 @@ function CtrlButton({
   onClick,
   label,
   active,
+  disabled,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   label: string;
   active?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
       title={label}
-      className={`grid h-9 w-9 place-items-center rounded-lg transition duration-150 hover:bg-white/15 active:scale-90 sm:h-10 sm:w-10 ${
+      className={`grid h-9 w-9 place-items-center rounded-lg transition duration-150 hover:bg-white/15 active:scale-90 disabled:pointer-events-none disabled:opacity-30 sm:h-10 sm:w-10 ${
         active ? "text-accent" : "text-white/90 hover:text-white"
       }`}
     >
@@ -1081,5 +1196,186 @@ function IcoCheck({ size = 16 }: Ico) {
     <svg width={size} height={size} viewBox="0 0 24 24" {...base} aria-hidden>
       <path d="m5 12 5 5L20 6" />
     </svg>
+  );
+}
+function IcoPrevEp({ size = 24 }: Ico) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base} aria-hidden>
+      <path d="M17 6 8 12l9 6V6Z" fill="currentColor" stroke="none" />
+      <path d="M6 5v14" />
+    </svg>
+  );
+}
+function IcoNextEp({ size = 24 }: Ico) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base} aria-hidden>
+      <path d="M7 6l9 6-9 6V6Z" fill="currentColor" stroke="none" />
+      <path d="M18 5v14" />
+    </svg>
+  );
+}
+function IcoList({ size = 24 }: Ico) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base} aria-hidden>
+      <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+    </svg>
+  );
+}
+function IcoClose({ size = 24 }: Ico) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base} aria-hidden>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
+// -------------------------------------------------------- episode list panel
+
+// Serialize frame captures so opening a long series doesn't spawn N decoders at
+// once; results are cached across opens for the session.
+let captureChain: Promise<unknown> = Promise.resolve();
+const thumbCache = new Map<string, string>();
+
+/** Grab a JPEG data URL from the middle of a video via a hidden <video> + canvas. */
+function captureVideoFrame(url: string, atRatio = 0.5): Promise<string | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.crossOrigin = "anonymous";
+    video.muted = true;
+    video.preload = "metadata";
+    video.playsInline = true;
+    let settled = false;
+    const finish = (v: string | null) => {
+      if (settled) return;
+      settled = true;
+      video.removeAttribute("src");
+      video.load();
+      resolve(v);
+    };
+    video.onloadedmetadata = () => {
+      const d = video.duration;
+      video.currentTime = Number.isFinite(d) && d > 0 ? d * atRatio : 1;
+    };
+    video.onseeked = () => {
+      try {
+        const w = video.videoWidth || 320;
+        const h = video.videoHeight || 180;
+        const canvas = document.createElement("canvas");
+        canvas.width = 320;
+        canvas.height = Math.round((320 * h) / w) || 180;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return finish(null);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        finish(canvas.toDataURL("image/jpeg", 0.72));
+      } catch {
+        // Tainted canvas — the signed URL lacks CORS headers. Fall back quietly.
+        finish(null);
+      }
+    };
+    video.onerror = () => finish(null);
+    setTimeout(() => finish(null), 9000);
+    video.src = url;
+  });
+}
+
+function EpisodeRow({
+  episode,
+  active,
+  onSelect,
+  resolveSource,
+  fallback,
+}: {
+  episode: PlayerEpisode;
+  active: boolean;
+  onSelect: () => void;
+  resolveSource?: (episodeId: string) => Promise<string | null>;
+  fallback?: string | null;
+}) {
+  const [thumb, setThumb] = useState<string | null>(
+    episode.thumbnailUrl ?? thumbCache.get(episode.id) ?? null,
+  );
+
+  // No stored thumbnail → lazily grab a mid-video frame (queued + cached).
+  useEffect(() => {
+    if (thumb || !resolveSource) return;
+    let cancelled = false;
+    captureChain = captureChain.then(async () => {
+      if (cancelled) return;
+      const cached = thumbCache.get(episode.id);
+      if (cached) {
+        setThumb(cached);
+        return;
+      }
+      const url = await resolveSource(episode.id);
+      if (!url || cancelled) return;
+      const frame = await captureVideoFrame(url, 0.5);
+      if (frame) {
+        thumbCache.set(episode.id, frame);
+        if (!cancelled) setThumb(frame);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [episode.id, resolveSource, thumb]);
+
+  const mins = episode.durationSec ? Math.round(episode.durationSec / 60) : null;
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`flex w-full items-center gap-3 rounded-xl border px-2.5 py-2 text-left transition ${
+        active
+          ? "border-accent/60 bg-accent/10"
+          : "border-transparent hover:border-white/10 hover:bg-white/5"
+      }`}
+    >
+      <span
+        className={`w-5 shrink-0 text-center text-sm font-bold ${
+          active ? "text-accent" : "text-white/40"
+        }`}
+      >
+        {episode.number}
+      </span>
+      <div className="relative h-12 w-20 shrink-0 overflow-hidden rounded-md bg-white/[.06]">
+        {thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={thumb} alt="" className="h-full w-full object-cover" />
+        ) : fallback ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={fallback}
+            alt=""
+            className="h-full w-full object-cover opacity-60"
+          />
+        ) : (
+          <div className="h-full w-full bg-gradient-to-br from-[#1e2a4d] to-[#0a0e17]" />
+        )}
+        {active ? (
+          <span className="absolute inset-0 grid place-items-center bg-black/40">
+            <span className="grid h-6 w-6 place-items-center rounded-full bg-accent text-white">
+              <IcoPlay size={13} />
+            </span>
+          </span>
+        ) : null}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p
+          className={`truncate text-sm font-semibold ${
+            active ? "text-foreground" : "text-white/85"
+          }`}
+        >
+          {episode.title}
+        </p>
+        <p className="truncate text-xs text-muted">
+          {active
+            ? "Одоо тоглож байна"
+            : mins
+              ? `${mins} мин`
+              : `Анги ${episode.number}`}
+        </p>
+      </div>
+    </button>
   );
 }
