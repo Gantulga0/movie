@@ -66,10 +66,12 @@ export default function RegisterPage() {
         phone: form.phone.trim(),
         password: form.password,
       });
-      // Account created — the OTP screen finishes sign-up.
+      // Account created — the verify screen shows the code to SMS to 144773.
+      const v = res.verification;
       router.replace(
-        `/verify?identifier=${encodeURIComponent(res.otp.target)}` +
-          (res.otp.devCode ? `&dev=${res.otp.devCode}` : ""),
+        `/verify?session=${encodeURIComponent(v.sessionId)}` +
+          `&code=${encodeURIComponent(v.code)}` +
+          `&phone=${encodeURIComponent(form.phone.trim())}`,
       );
     } catch (err) {
       setFormError(

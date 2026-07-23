@@ -59,6 +59,15 @@ function makePrisma() {
         Object.assign(row!, data);
         return row;
       },
+      updateMany: async ({ where, data }: { where: any; data: Record<string, any> }) => {
+        const matches = rows.filter(
+          (r) =>
+            r.sessionId === where.sessionId &&
+            (where.consumedAt === null ? !r.consumedAt : true),
+        );
+        matches.forEach((r) => Object.assign(r, data));
+        return { count: matches.length };
+      },
     },
   } as unknown as PrismaService;
   return { prisma, rows };
@@ -175,4 +184,60 @@ test('createSession fails loudly when VERIFY_MN_API_KEY is missing', async () =>
     () => verifyMn.createSession({ phone: '99112233', text: '482916' }),
     InternalServerErrorException,
   );
+});
+
+// Seed a stored row directly (bypassing verify.mn) for consume() tests.
+function seedRow(rows: Array<Record<string, any>>, over: Record<string, any> = {}) {
+  rows.push({
+    id: 'ref-1',
+    sessionId: 'r1',
+    phone: '99112233',
+    code: '482916',
+    status: 'VERIFIED',
+    purpose: 'RESET',
+    userId: 'user-1',
+    consumedAt: null,
+    expiresAt: new Date(Date.now() + 300_000),
+    ...over,
+  });
+}
+
+// 4. Reset consume: a VERIFIED session is spendable exactly once.
+test('consume spends a VERIFIED reset session once, then rejects replay', async () => {
+  const { svc, rows } = build();
+  seedRow(rows); // status VERIFIED, purpose RESET — recheck short-circuits, no fetch
+
+  const first = await svc.consume('r1', 'RESET' as any);
+  assert.equal(first.phone, '99112233');
+  assert.equal(rows[0].consumedAt instanceof Date, true);
+
+  await assert.rejects(() => svc.consume('r1', 'RESET' as any), /ашиглагдсан/);
+});
+
+// 5. consume rejects a purpose mismatch (a VERIFY session can't reset a password).
+test('consume rejects when the session purpose does not match', async () => {
+  const { svc, rows } = build();
+  seedRow(rows, { purpose: 'VERIFY' });
+  await assert.rejects(() => svc.consume('r1', 'RESET' as any), /төрөл/);
+});
+
+// 6. consume rejects a session that isn't verified yet.
+test('consume rejects an unverified session', async () => {
+  const { svc, rows } = build();
+  seedRow(rows, { status: 'PENDING' });
+  const restore = stubFetch(() => ({
+    body: {
+      sessionId: 'r1',
+      phone: '99112233',
+      sessionStatus: 'PENDING',
+      callbackStatus: 'PENDING',
+      verifiedAt: null,
+      expiresAt: new Date(Date.now() + 300_000).toISOString(),
+    },
+  }));
+  try {
+    await assert.rejects(() => svc.consume('r1', 'RESET' as any), /баталгаажаагүй/);
+  } finally {
+    restore();
+  }
 });

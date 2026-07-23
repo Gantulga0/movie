@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -11,8 +12,7 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { VerifyOtpDto } from './dto/verify-otp.dto';
-import { ResendOtpDto } from './dto/resend-otp.dto';
+import { VerifyRestartDto } from './dto/verify-restart.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshDto, LogoutDto } from './dto/refresh.dto';
@@ -20,30 +20,33 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { SafeUser } from '../users/users.service';
 
-/** OTP-sending endpoints get a tighter rate limit than the rest of the API. */
-const OTP_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
+// Endpoints that open a (paid) verify.mn session get a tighter rate limit;
+// status polls run on the default global limit so 3s polling isn't blocked.
+const VERIFY_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('register')
-  @Throttle(OTP_THROTTLE)
+  @Throttle(VERIFY_THROTTLE)
   register(@Body() dto: RegisterDto) {
     return this.auth.register(dto);
   }
 
-  @Post('verify-otp')
+  /** Poll while the user texts the code to 144773; returns tokens once verified. */
+  @Get('verify/status/:sessionId')
   @HttpCode(HttpStatus.OK)
-  verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.auth.verifyOtp(dto);
+  verifyStatus(@Param('sessionId') sessionId: string) {
+    return this.auth.verifyStatus(sessionId);
   }
 
-  @Post('resend-otp')
+  /** MO-SMS "resend": open a fresh session (e.g. after the code expired). */
+  @Post('verify/restart')
   @HttpCode(HttpStatus.OK)
-  @Throttle(OTP_THROTTLE)
-  resendOtp(@Body() dto: ResendOtpDto) {
-    return this.auth.resendOtp(dto);
+  @Throttle(VERIFY_THROTTLE)
+  verifyRestart(@Body() dto: VerifyRestartDto) {
+    return this.auth.restartVerification(dto);
   }
 
   @Post('login')
@@ -54,9 +57,16 @@ export class AuthController {
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  @Throttle(OTP_THROTTLE)
+  @Throttle(VERIFY_THROTTLE)
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.auth.forgotPassword(dto);
+  }
+
+  /** Poll while the user proves phone ownership for a reset. */
+  @Get('reset/status/:sessionId')
+  @HttpCode(HttpStatus.OK)
+  resetStatus(@Param('sessionId') sessionId: string) {
+    return this.auth.resetStatus(sessionId);
   }
 
   @Post('reset-password')
@@ -67,7 +77,7 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @Throttle(OTP_THROTTLE)
+  @Throttle(VERIFY_THROTTLE)
   refresh(@Body() dto: RefreshDto) {
     return this.auth.refresh(dto.refreshToken);
   }

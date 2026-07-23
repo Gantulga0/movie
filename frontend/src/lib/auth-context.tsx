@@ -31,9 +31,7 @@ interface AuthContextValue {
     email?: string;
     password: string;
   }) => Promise<PendingVerification>;
-  /** Called from the OTP screen; signs the user in on success. */
-  verifyOtp: (identifier: string, code: string) => Promise<void>;
-  /** Adopt a session returned by reset-password (it logs the user in). */
+  /** Adopt a session returned by verify/reset (it logs the user in). */
   adoptSession: (accessToken: string, refreshToken: string, user: User) => void;
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
@@ -210,7 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [persist],
   );
 
-  // Registration no longer signs in — the account first needs its OTP.
+  // Registration no longer signs in — the account first verifies its phone.
   const register = useCallback(
     async (payload: {
       name?: string;
@@ -221,14 +219,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return authApi.register(payload);
     },
     [],
-  );
-
-  const verifyOtp = useCallback(
-    async (identifier: string, code: string) => {
-      const res = await authApi.verifyOtp({ identifier, code });
-      persist(res.accessToken, res.refreshToken, res.user);
-    },
-    [persist],
   );
 
   const adoptSession = useCallback(
@@ -258,12 +248,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       login,
       register,
-      verifyOtp,
       adoptSession,
       refresh,
       logout,
     }),
-    [user, token, loading, login, register, verifyOtp, adoptSession, refresh, logout],
+    [user, token, loading, login, register, adoptSession, refresh, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

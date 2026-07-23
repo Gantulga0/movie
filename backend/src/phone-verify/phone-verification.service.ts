@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PhoneVerificationStatus } from '@prisma/client';
+import { PhoneVerification, PhoneVerificationStatus, PhoneVerifyPurpose } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { generateOtpCode } from '../common/ids';
@@ -14,8 +14,15 @@ const MAX_WAIT_MS = 300_000;
 /** The subset of a session the client needs to render the SMS prompt. */
 export interface VerificationPrompt {
   sessionId: string;
+  /** The code the user must SMS (shown big; also embedded in smsUri). */
+  code: string;
+  /** Shortcode to send it to — always "144773". */
+  shortcode: string;
+  /** "sms:144773?body=..." — offer as a tap-to-open link on mobile. */
   smsUri: string;
+  /** verify.mn's Mongolian instruction text. */
   displayInstruction: string;
+  /** ISO timestamp; the session dies at this point. */
   expiresAt: string;
 }
 
@@ -76,10 +83,13 @@ export class PhoneVerificationService {
   // ---------------------------------------------------------------- start
 
   /**
-   * Opens a session and stores it (optionally linked to a user/order id).
-   * Returns the prompt to show the user. Does not wait for the SMS.
+   * Opens a session and stores it (optionally linked to a user, with a purpose
+   * of VERIFY or RESET). Returns the prompt to show the user. Does not wait.
    */
-  async start(phone: string, opts?: { userId?: string }): Promise<VerificationPrompt> {
+  async start(
+    phone: string,
+    opts?: { userId?: string; purpose?: PhoneVerifyPurpose },
+  ): Promise<VerificationPrompt> {
     const normalized = this.normalizePhone(phone);
     // Fresh 4-6 digit numeric code per session (6-digit, never reused).
     const code = generateOtpCode();
@@ -99,6 +109,7 @@ export class PhoneVerificationService {
         phone: normalized,
         code,
         userId: opts?.userId,
+        purpose: opts?.purpose ?? PhoneVerifyPurpose.VERIFY,
         status: PhoneVerificationStatus.PENDING,
         expiresAt: new Date(session.expiresAt),
       },
@@ -110,10 +121,61 @@ export class PhoneVerificationService {
 
     return {
       sessionId: session.sessionId,
+      code: session.text,
+      shortcode: session.shortcode,
       smsUri: session.smsUri,
       displayInstruction: session.displayInstruction,
       expiresAt: session.expiresAt,
     };
+  }
+
+  /** The stored row for a session, or null. Used by callers (e.g. auth). */
+  find(sessionId: string): Promise<PhoneVerification | null> {
+    return this.prisma.phoneVerification.findUnique({ where: { sessionId } });
+  }
+
+  /**
+   * Open a fresh session for an existing one's phone/user/purpose — the MO-SMS
+   * equivalent of "resend code" (e.g. after expiry). Returns a new prompt.
+   */
+  async restart(sessionId: string): Promise<VerificationPrompt> {
+    const row = await this.find(sessionId);
+    if (!row) throw new BadRequestException('Session олдсонгүй');
+    return this.start(row.phone, {
+      userId: row.userId ?? undefined,
+      purpose: row.purpose,
+    });
+  }
+
+  /**
+   * Atomically spend a VERIFIED session for a one-time action (e.g. applying a
+   * password reset). Verifies status + purpose, then claims it so it can't be
+   * replayed. Returns the phone/user the session proved ownership of.
+   */
+  async consume(
+    sessionId: string,
+    purpose: PhoneVerifyPurpose,
+  ): Promise<{ phone: string; userId: string | null }> {
+    const row = await this.find(sessionId);
+    if (!row) throw new BadRequestException('Session олдсонгүй');
+    if (row.purpose !== purpose) {
+      throw new BadRequestException('Session төрөл таарахгүй байна');
+    }
+
+    const status = await this.recheck(row.sessionId, row.status);
+    if (status !== PhoneVerificationStatus.VERIFIED) {
+      throw new BadRequestException('Утас баталгаажаагүй байна');
+    }
+
+    // Guarded claim: only the first caller with consumedAt still null wins.
+    const claimed = await this.prisma.phoneVerification.updateMany({
+      where: { sessionId, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      throw new BadRequestException('Session аль хэдийн ашиглагдсан');
+    }
+    return { phone: row.phone, userId: row.userId };
   }
 
   // --------------------------------------------------------------- verify

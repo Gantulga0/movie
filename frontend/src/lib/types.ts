@@ -6,8 +6,7 @@ export type ContentSort = "new" | "year" | "title" | "watched" | "rated";
 export type VideoQuality = "P480" | "P720" | "P1080" | "P4K";
 export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED";
 export type SubscriptionStatus = "ACTIVE" | "EXPIRED" | "CANCELLED";
-export type OtpChannel = "EMAIL" | "SMS";
-export type OtpPurpose = "VERIFY" | "RESET";
+export type PhoneVerifyStatus = "PENDING" | "VERIFIED" | "EXPIRED";
 
 export interface User {
   id: string;
@@ -28,17 +27,31 @@ export interface AuthResult {
   refreshToken: string;
 }
 
-export interface OtpIssue {
-  target: string;
-  channel: OtpChannel;
-  expiresInMinutes: number;
-  /** Only present outside production. */
-  devCode?: string;
+/** What the client shows so the user can send the MO-SMS to verify.mn. */
+export interface VerificationPrompt {
+  sessionId: string;
+  /** The code the user must SMS (shown big; also embedded in smsUri). */
+  code: string;
+  /** Shortcode to send it to — "144773". */
+  shortcode: string;
+  /** "sms:144773?body=..." — a tap-to-open link on mobile. */
+  smsUri: string;
+  /** verify.mn's Mongolian instruction text. */
+  displayInstruction: string;
+  /** ISO timestamp; the session expires at this point. */
+  expiresAt: string;
 }
 
 export interface PendingVerification {
   requiresVerification: true;
-  otp: OtpIssue;
+  verification: VerificationPrompt;
+}
+
+/** Polled while the user texts the code; carries tokens once verified. */
+export interface VerifyStatus {
+  status: PhoneVerifyStatus;
+  verified: boolean;
+  auth?: AuthResult;
 }
 
 export interface Genre {

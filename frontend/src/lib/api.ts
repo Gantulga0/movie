@@ -11,7 +11,6 @@ import type {
   Genre,
   HistoryItem,
   MySubscription,
-  OtpIssue,
   Paged,
   Payment,
   PaymentCheck,
@@ -22,6 +21,8 @@ import type {
   Rental,
   RentCheckoutResult,
   User,
+  VerificationPrompt,
+  VerifyStatus,
   WatchSources,
   WatchlistItem,
 } from "./types";
@@ -133,26 +134,34 @@ export const authApi = {
   }) =>
     apiFetch<PendingVerification>("/auth/register", { method: "POST", body: payload }),
 
-  verifyOtp: (payload: { identifier: string; code: string }) =>
-    apiFetch<AuthResult>("/auth/verify-otp", { method: "POST", body: payload }),
+  /** Poll while the user texts the code to 144773; carries tokens once verified. */
+  verifyStatus: (sessionId: string) =>
+    apiFetch<VerifyStatus>(`/auth/verify/status/${encodeURIComponent(sessionId)}`),
 
-  resendOtp: (payload: { identifier: string; purpose?: "VERIFY" | "RESET" }) =>
-    apiFetch<OtpIssue>("/auth/resend-otp", { method: "POST", body: payload }),
+  /** MO-SMS "resend": open a fresh session (e.g. after the code expired). */
+  verifyRestart: (sessionId: string) =>
+    apiFetch<VerificationPrompt>("/auth/verify/restart", {
+      method: "POST",
+      body: { sessionId },
+    }),
 
   login: (payload: { identifier: string; password: string }) =>
     apiFetch<AuthResult>("/auth/login", { method: "POST", body: payload }),
 
   forgotPassword: (payload: { identifier: string }) =>
-    apiFetch<{ sent: boolean; otp?: OtpIssue }>("/auth/forgot-password", {
+    apiFetch<{ verification: VerificationPrompt }>("/auth/forgot-password", {
       method: "POST",
       body: payload,
     }),
 
-  resetPassword: (payload: {
-    identifier: string;
-    code: string;
-    newPassword: string;
-  }) => apiFetch<AuthResult>("/auth/reset-password", { method: "POST", body: payload }),
+  /** Poll while the user proves phone ownership for a reset. */
+  resetStatus: (sessionId: string) =>
+    apiFetch<{ status: string; verified: boolean }>(
+      `/auth/reset/status/${encodeURIComponent(sessionId)}`,
+    ),
+
+  resetPassword: (payload: { sessionId: string; newPassword: string }) =>
+    apiFetch<AuthResult>("/auth/reset-password", { method: "POST", body: payload }),
 
   me: (token: string) => apiFetch<User>("/auth/me", { token }),
 

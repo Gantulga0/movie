@@ -59,43 +59,23 @@ model RefreshToken {
   @@index([userId])
 }
 
-enum OtpChannel {
-  EMAIL
-  SMS
-}
-
-enum OtpPurpose {
-  VERIFY // confirm a new account
-  RESET  // reset a forgotten password
-}
-
-model Otp {
-  id      String     @id @default(uuid())
-  // The email address or phone number the code was sent to.
-  target  String
-  channel OtpChannel
-  purpose OtpPurpose
-  // bcrypt hash of the 6-digit code — never stored in clear.
-  codeHash   String
-  expiresAt  DateTime
-  consumedAt DateTime?
-  attempts   Int       @default(0)
-
-  createdAt DateTime @default(now())
-
-  @@index([target, purpose])
-}
-
 enum PhoneVerificationStatus {
   PENDING
   VERIFIED
   EXPIRED
 }
 
-/// A verify.mn Mobile-Originated (MO) SMS verification session. Unlike the
-/// `Otp` flow (we send the code), here the *user* texts a per-session code to
-/// shortcode 144773; verify.mn confirms receipt and we poll (or get a callback)
-/// until VERIFIED. One row per verify.mn session, keyed by its sessionId.
+// What a verified verify.mn session authorizes: confirming a new account, or
+// proving phone ownership before a password reset.
+enum PhoneVerifyPurpose {
+  VERIFY
+  RESET
+}
+
+/// A verify.mn Mobile-Originated (MO) SMS verification session: the *user*
+/// texts a per-session code to shortcode 144773; verify.mn confirms receipt and
+/// we poll (or get a callback) until VERIFIED. One row per verify.mn session,
+/// keyed by its sessionId. This replaces the old send-a-code SMS OTP flow.
 model PhoneVerification {
   id        String @id @default(uuid())
   // verify.mn session id — the handle we poll and that the callback carries.
@@ -104,12 +84,17 @@ model PhoneVerification {
   // The 4-6 digit numeric code the user must SMS; unique per session, never
   // reused. Stored in clear only for support/debugging — it is not a secret
   // (verify.mn, not us, matches the inbound SMS against it).
-  code   String
-  status PhoneVerificationStatus @default(PENDING)
-  // Optional id of the user/order record this verification belongs to.
+  code    String
+  status  PhoneVerificationStatus @default(PENDING)
+  purpose PhoneVerifyPurpose      @default(VERIFY)
+  // Id of the user this verification belongs to (null during registration if
+  // the account is created after verification; here it is set at register).
   userId String?
 
   verifiedAt DateTime?
+  // Set when the verified session is spent (e.g. a reset password applied), so
+  // a one-time action can't be replayed.
+  consumedAt DateTime?
   // verify.mn TTL (~300s). Past this without VERIFIED = failure.
   expiresAt DateTime
 

@@ -50,15 +50,20 @@ export default function LoginPage() {
       setTransitioning(true);
       play("/home");
     } catch (err) {
-      // Unverified accounts get bounced to the OTP screen — the API already
-      // sent a fresh code along with this error.
+      // Unverified accounts get bounced to the verify screen — the API opened a
+      // fresh verify.mn session and returned its prompt with this error.
       if (err instanceof ApiError && err.code === "ACCOUNT_NOT_VERIFIED") {
-        const otp = (err.data as { otp?: { target?: string; devCode?: string } })?.otp;
-        const target = otp?.target ?? identifier.trim();
-        router.replace(
-          `/verify?identifier=${encodeURIComponent(target)}` +
-            (otp?.devCode ? `&dev=${otp.devCode}` : ""),
-        );
+        const v = (err.data as { verification?: { sessionId: string; code: string } })
+          ?.verification;
+        if (v?.sessionId && v.code) {
+          router.replace(
+            `/verify?session=${encodeURIComponent(v.sessionId)}` +
+              `&code=${encodeURIComponent(v.code)}` +
+              `&phone=${encodeURIComponent(identifier.trim())}`,
+          );
+          return;
+        }
+        setFormError("Бүртгэл баталгаажаагүй байна. Дахин оролдоно уу.");
         return;
       }
       setFormError(

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -57,6 +58,30 @@ export class VerifyMnService {
     return this.config
       .get<string>('VERIFY_MN_BASE_URL', 'https://api.verify.mn')
       .replace(/\/$/, '');
+  }
+
+  /**
+   * Source IPs verify.mn's (load-balanced) callback service sends from. Any
+   * other origin should be rejected 403. Empty env disables the check (local).
+   */
+  private get allowedCallbackIps(): string[] {
+    return this.config
+      .get<string>('VERIFY_MN_CALLBACK_IP', '3.34.8.248,13.124.219.192')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  /** Rejects a callback delivery from any IP other than verify.mn's. */
+  assertAllowedIp(ip: string | undefined): void {
+    const allowed = this.allowedCallbackIps;
+    if (allowed.length === 0) return; // check disabled (e.g. local dev)
+    // A proxy may report IPv4 over IPv6 as "::ffff:1.2.3.4" — strip the prefix.
+    const normalized = (ip ?? '').replace(/^::ffff:/, '');
+    if (!allowed.includes(normalized)) {
+      this.logger.warn(`verify.mn callback from disallowed ip: ${ip}`);
+      throw new ForbiddenException('Callback эх сурвалж зөвшөөрөгдөөгүй');
+    }
   }
 
   /** Reads the API key or throws — verify.mn cannot run without it. */

@@ -1,22 +1,24 @@
 import {
-  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  ConflictException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes, createHash } from 'crypto';
-import { OtpChannel, OtpPurpose, User } from '@prisma/client';
+import { PhoneVerificationStatus, PhoneVerifyPurpose, User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService, SafeUser } from '../users/users.service';
-import { OtpService, OtpIssueResult } from '../otp/otp.service';
+import {
+  PhoneVerificationService,
+  VerificationPrompt,
+} from '../phone-verify/phone-verification.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { VerifyOtpDto } from './dto/verify-otp.dto';
-import { ResendOtpDto } from './dto/resend-otp.dto';
+import { VerifyRestartDto } from './dto/verify-restart.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 
@@ -26,25 +28,40 @@ export interface AuthResult {
   refreshToken: string;
 }
 
+/** Returned by register/login: the account exists but the phone isn't confirmed. */
 export interface PendingVerification {
   requiresVerification: true;
-  otp: OtpIssueResult;
+  verification: VerificationPrompt;
 }
 
+/** Polled by the client while it waits for the user's SMS to land. */
+export interface VerifyStatusResult {
+  status: PhoneVerificationStatus;
+  verified: boolean;
+  /** Present once verified: the tokens that sign the user in. */
+  auth?: AuthResult;
+}
+
+/**
+ * Phone ownership is proven with verify.mn Mobile-Originated SMS: the user texts
+ * a per-session code to shortcode 144773 and the client polls a status endpoint.
+ * There is no "we send you a code" OTP anymore — registration, the unverified-
+ * login bounce, and password reset all run through this MO-SMS flow.
+ */
 @Injectable()
 export class AuthService {
   constructor(
     private readonly users: UsersService,
-    private readonly otp: OtpService,
+    private readonly phoneVerification: PhoneVerificationService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {}
 
   /**
-   * Creates the (unverified) account and texts an OTP to the phone. The
-   * client moves to the verify screen; a token is only issued after
-   * verify-otp succeeds.
+   * Creates the (unverified) account and opens a verify.mn session. The client
+   * shows the returned code + "text it to 144773" prompt and polls
+   * `verifyStatus`; a token is only issued once the SMS is confirmed.
    */
   async register(dto: RegisterDto): Promise<PendingVerification> {
     const [phoneTaken, emailTaken] = await Promise.all([
@@ -66,36 +83,36 @@ export class AuthService {
       passwordHash,
     });
 
-    const issued = await this.issueOtpFor(user, OtpPurpose.VERIFY);
-    return { requiresVerification: true, otp: issued };
+    const verification = await this.phoneVerification.start(user.phone, {
+      userId: user.id,
+      purpose: PhoneVerifyPurpose.VERIFY,
+    });
+    return { requiresVerification: true, verification };
   }
 
-  /** Confirms the OTP, marks the account verified and signs the user in. */
-  async verifyOtp(dto: VerifyOtpDto): Promise<AuthResult> {
-    const user = await this.users.findByIdentifier(dto.identifier);
-    if (!user) {
-      throw new NotFoundException('Хэрэглэгч олдсонгүй');
+  /**
+   * Status of a verification session. Once verify.mn reports VERIFIED, marks the
+   * linked account verified and returns the sign-in tokens. Safe to poll.
+   */
+  async verifyStatus(sessionId: string): Promise<VerifyStatusResult> {
+    const { status, verified } = await this.phoneVerification.checkStatus(sessionId);
+    if (!verified) return { status, verified: false };
+
+    const row = await this.phoneVerification.find(sessionId);
+    if (!row?.userId) {
+      // Verified but not linked to an account (shouldn't happen via register).
+      return { status, verified: true };
     }
-
-    await this.otp.verify(this.otpTarget(user), OtpPurpose.VERIFY, dto.code);
-
-    const verified = user.verified ? user : await this.users.markVerified(user.id);
-    return this.buildResult(verified);
+    const user = await this.users.markVerified(row.userId);
+    return { status, verified: true, auth: await this.buildResult(user) };
   }
 
-  async resendOtp(dto: ResendOtpDto): Promise<OtpIssueResult> {
-    const user = await this.users.findByIdentifier(dto.identifier);
-    if (!user) {
-      throw new NotFoundException('Хэрэглэгч олдсонгүй');
-    }
-    const purpose = dto.purpose ?? OtpPurpose.VERIFY;
-    if (purpose === OtpPurpose.VERIFY && user.verified) {
-      throw new ConflictException('Бүртгэл аль хэдийн баталгаажсан байна');
-    }
-    return this.issueOtpFor(user, purpose);
+  /** MO-SMS "resend": open a fresh session for the same phone (e.g. on expiry). */
+  restartVerification(dto: VerifyRestartDto): Promise<VerificationPrompt> {
+    return this.phoneVerification.restart(dto.sessionId);
   }
 
-  async login(dto: LoginDto): Promise<AuthResult> {
+  async login(dto: LoginDto): Promise<AuthResult | PendingVerification> {
     const user = await this.users.findByIdentifier(dto.identifier.trim());
     if (!user) {
       throw new UnauthorizedException('Нэвтрэх мэдээлэл буруу байна');
@@ -105,17 +122,17 @@ export class AuthService {
       throw new UnauthorizedException('Нэвтрэх мэдээлэл буруу байна');
     }
 
-    // Unverified accounts are bounced to the verify screen; a fresh code is
-    // sent automatically so the client only has to collect it.
+    // Unverified accounts are bounced to the verify screen with a fresh session
+    // so the client can show the code to text and start polling.
     if (!user.verified) {
-      const issued = await this.issueOtpFor(user, OtpPurpose.VERIFY).catch(
-        () => null,
-      );
+      const verification = await this.phoneVerification
+        .start(user.phone, { userId: user.id, purpose: PhoneVerifyPurpose.VERIFY })
+        .catch(() => null);
       throw new ForbiddenException({
         statusCode: 403,
         error: 'ACCOUNT_NOT_VERIFIED',
-        message: 'Бүртгэл баталгаажаагүй байна. Баталгаажуулах код илгээлээ.',
-        otp: issued,
+        message: 'Бүртгэл баталгаажаагүй байна. Утсаа баталгаажуулна уу.',
+        verification,
       });
     }
 
@@ -123,25 +140,41 @@ export class AuthService {
   }
 
   /**
-   * Sends a password-reset code. Always responds success-shaped so account
-   * existence can't be probed — but when the user exists the code is real.
+   * Starts a reset by opening a verify.mn session for the account's phone. The
+   * user proves ownership via SMS, then `resetPassword` sets the new password.
+   * Requires the account to exist — we never open a (paid) session for an
+   * unknown phone.
    */
-  async forgotPassword(dto: ForgotPasswordDto): Promise<{ sent: boolean; otp?: OtpIssueResult }> {
+  async forgotPassword(dto: ForgotPasswordDto): Promise<{ verification: VerificationPrompt }> {
     const user = await this.users.findByIdentifier(dto.identifier.trim());
     if (!user) {
-      return { sent: true };
+      throw new NotFoundException('Бүртгэлтэй хэрэглэгч олдсонгүй');
     }
-    const issued = await this.issueOtpFor(user, OtpPurpose.RESET);
-    return { sent: true, otp: issued };
+    const verification = await this.phoneVerification.start(user.phone, {
+      userId: user.id,
+      purpose: PhoneVerifyPurpose.RESET,
+    });
+    return { verification };
   }
 
+  /** Poll target for the reset screen — reports whether the SMS has landed. */
+  resetStatus(sessionId: string): Promise<{ status: PhoneVerificationStatus; verified: boolean }> {
+    return this.phoneVerification.checkStatus(sessionId);
+  }
+
+  /**
+   * Applies the new password once its reset session is VERIFIED. Consuming the
+   * session (one-time) proves phone ownership, so it also signs the user in.
+   */
   async resetPassword(dto: ResetPasswordDto): Promise<AuthResult> {
-    const user = await this.users.findByIdentifier(dto.identifier.trim());
+    const { phone } = await this.phoneVerification.consume(
+      dto.sessionId,
+      PhoneVerifyPurpose.RESET,
+    );
+    const user = await this.users.findByPhone(phone);
     if (!user) {
       throw new NotFoundException('Хэрэглэгч олдсонгүй');
     }
-
-    await this.otp.verify(this.otpTarget(user), OtpPurpose.RESET, dto.code);
 
     const passwordHash = await bcrypt.hash(dto.newPassword, 12);
     const updated = await this.users.updatePassword(user.id, passwordHash);
@@ -152,20 +185,6 @@ export class AuthService {
   }
 
   // -------------------------------------------------------------------------
-
-  /** Codes go to the phone; email is only a fallback if SMS has no target. */
-  private otpTarget(user: User): string {
-    return user.phone ?? user.email ?? '';
-  }
-
-  private issueOtpFor(user: User, purpose: OtpPurpose): Promise<OtpIssueResult> {
-    const viaSms = Boolean(user.phone);
-    return this.otp.issue(
-      viaSms ? user.phone : (user.email ?? ''),
-      viaSms ? OtpChannel.SMS : OtpChannel.EMAIL,
-      purpose,
-    );
-  }
 
   private async buildResult(user: User): Promise<AuthResult> {
     const accessToken = this.jwt.sign(

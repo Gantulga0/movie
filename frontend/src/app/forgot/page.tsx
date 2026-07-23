@@ -4,11 +4,11 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthShell, AuthLink } from "@/components/AuthShell";
 import { Field } from "@/components/Field";
-import { OtpInput } from "@/components/OtpInput";
+import { PhoneVerifyPrompt, VerifySession } from "@/components/PhoneVerifyPrompt";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, authApi } from "@/lib/api";
 
-type Step = "identifier" | "reset";
+type Step = "identifier" | "verify" | "password";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -16,10 +16,12 @@ export default function ForgotPasswordPage() {
 
   const [step, setStep] = useState<Step>("identifier");
   const [identifier, setIdentifier] = useState("");
-  const [code, setCode] = useState("");
+  const [session, setSession] = useState<VerifySession | null>(null);
+  // The verified session id used to apply the new password (may differ from the
+  // first one if the user asked for a fresh code).
+  const [verifiedSessionId, setVerifiedSessionId] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [devCode, setDevCode] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -33,22 +35,19 @@ export default function ForgotPasswordPage() {
     setSubmitting(true);
     try {
       const res = await authApi.forgotPassword({ identifier: identifier.trim() });
-      setDevCode(res.otp?.devCode ?? "");
-      setStep("reset");
+      const v = res.verification;
+      setSession({ sessionId: v.sessionId, code: v.code, smsUri: v.smsUri });
+      setStep("verify");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Код илгээж чадсангүй.");
+      setError(err instanceof ApiError ? err.message : "Код авахад алдаа гарлаа.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function resetPassword(e: FormEvent) {
+  async function submitNewPassword(e: FormEvent) {
     e.preventDefault();
     setError("");
-    if (code.length !== 6) {
-      setError("6 оронтой кодоо оруулна уу.");
-      return;
-    }
     if (password.length < 6) {
       setError("Нууц үг дор хаяж 6 тэмдэгт байх ёстой.");
       return;
@@ -60,8 +59,7 @@ export default function ForgotPasswordPage() {
     setSubmitting(true);
     try {
       const res = await authApi.resetPassword({
-        identifier: identifier.trim(),
-        code,
+        sessionId: verifiedSessionId,
         newPassword: password,
       });
       // A successful reset signs the user straight in.
@@ -73,14 +71,17 @@ export default function ForgotPasswordPage() {
     }
   }
 
+  const subtitle =
+    step === "identifier"
+      ? "Бүртгэлтэй утасны дугаараа оруулаад SMS-ээр өөрийгөө баталгаажуулна уу."
+      : step === "verify"
+        ? "Доорх кодыг 144773 руу илгээж утсаа баталгаажуулна уу."
+        : "Шинэ нууц үгээ тохируулна уу.";
+
   return (
     <AuthShell
       title="Нууц үг сэргээх"
-      subtitle={
-        step === "identifier"
-          ? "Бүртгэлтэй утасны дугаараа оруулбал сэргээх код илгээнэ."
-          : `${identifier} руу илгээсэн кодыг оруулаад шинэ нууц үгээ тохируулна уу.`
-      }
+      subtitle={subtitle}
       footer={
         <>
           Нууц үгээ санав уу? <AuthLink href="/login">Нэвтрэх</AuthLink>
@@ -109,22 +110,32 @@ export default function ForgotPasswordPage() {
             disabled={submitting}
             className="mt-2 w-full rounded-lg bg-brand py-3 text-base font-bold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {submitting ? "Илгээж байна…" : "Код илгээх"}
+            {submitting ? "Уншиж байна…" : "Үргэлжлүүлэх"}
           </button>
         </form>
-      ) : (
-        <form onSubmit={resetPassword} noValidate>
-          {devCode ? (
-            <div className="mb-4 rounded-lg border border-gold/30 bg-gold/10 px-4 py-3 text-sm text-gold">
-              Тест орчны код: <span className="font-mono font-bold">{devCode}</span>
-            </div>
-          ) : null}
+      ) : null}
 
-          <div className="mb-5">
-            <p className="mb-2 text-sm font-medium text-white/80">Сэргээх код</p>
-            <OtpInput value={code} onChange={setCode} disabled={submitting} />
+      {step === "verify" && session ? (
+        <PhoneVerifyPrompt
+          phone={identifier.trim()}
+          session={session}
+          poll={(sid) => authApi.resetStatus(sid)}
+          restart={async (sid) => {
+            const p = await authApi.verifyRestart(sid);
+            return { sessionId: p.sessionId, code: p.code, smsUri: p.smsUri };
+          }}
+          onVerified={(_r, sessionId) => {
+            setVerifiedSessionId(sessionId);
+            setStep("password");
+          }}
+        />
+      ) : null}
+
+      {step === "password" ? (
+        <form onSubmit={submitNewPassword} noValidate>
+          <div className="mb-4 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-accent">
+            Утас баталгаажлаа. Шинэ нууц үгээ тохируулна уу.
           </div>
-
           <Field
             label="Шинэ нууц үг"
             name="password"
@@ -143,7 +154,6 @@ export default function ForgotPasswordPage() {
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
           />
-
           <button
             type="submit"
             disabled={submitting}
@@ -151,16 +161,8 @@ export default function ForgotPasswordPage() {
           >
             {submitting ? "Шинэчилж байна…" : "Нууц үг шинэчлэх"}
           </button>
-
-          <button
-            type="button"
-            onClick={() => setStep("identifier")}
-            className="mt-4 w-full text-sm text-white/60 transition hover:text-white"
-          >
-            Өөр хаяг ашиглах
-          </button>
         </form>
-      )}
+      ) : null}
     </AuthShell>
   );
 }
