@@ -90,12 +90,13 @@ function HomeContent() {
   );
 
   // One row per title — the latest session wins. Titles watched to the end
-  // stay in the rail too, so nothing silently disappears once finished.
+  // stay in the rail too (completed shows regardless of the 30s warm-up guard),
+  // so nothing silently disappears once finished.
   const continueWatching = useMemo(() => {
     const seen = new Set<string>();
     const rows: HistoryItem[] = [];
     for (const row of history) {
-      if (row.progressSec < 30) continue;
+      if (row.progressSec < 30 && !row.completed) continue;
       if (seen.has(row.content.id)) continue;
       seen.add(row.content.id);
       rows.push(row);

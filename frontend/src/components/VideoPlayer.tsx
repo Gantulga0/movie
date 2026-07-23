@@ -77,15 +77,10 @@ export function VideoPlayer({
   const [muted, setMuted] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [visible, setVisible] = useState(true);
+  // Real element/native fullscreen. The container (with our logo overlay + custom
+  // controls) goes fullscreen where the element Fullscreen API works; iPhone
+  // Safari falls back to the native video player (see toggleFullscreen).
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Our own (non-native) fullscreen mode. On iPhone the browser can't fullscreen
-  // a <div>, and handing off to Apple's native player strips our logo overlay,
-  // so we run our own full-viewport layer (fixed inset-0, top z-index). Held in
-  // portrait we rotate it 90° to landscape via CSS so the video is big with the
-  // logo intact; rotating the phone drops the transform.
-  const [fsActive, setFsActive] = useState(false);
-  // Device held portrait — drives the CSS landscape rotation of our fullscreen.
-  const [isPortrait, setIsPortrait] = useState(false);
   const [menu, setMenu] = useState<null | "quality" | "cc">(null);
   const [ccIndex, setCcIndex] = useState(-1); // -1 = off
   const [scrubbing, setScrubbing] = useState(false);
@@ -248,37 +243,32 @@ export function VideoPlayer({
     const doc = document as Document & {
       webkitFullscreenElement?: Element;
       webkitExitFullscreen?: () => void;
-      webkitFullscreenEnabled?: boolean;
     };
     const node = el as HTMLDivElement & {
       webkitRequestFullscreen?: () => void;
     };
-    const inRealFs = Boolean(
-      doc.fullscreenElement ?? doc.webkitFullscreenElement,
-    );
+    const video = videoRef.current as
+      | (HTMLVideoElement & { webkitEnterFullscreen?: () => void })
+      | null;
 
-    // Exit — leave both our custom mode and any real element fullscreen.
-    if (fsActive || inRealFs) {
-      if (inRealFs) (doc.exitFullscreen ?? doc.webkitExitFullscreen)?.call(doc);
-      setFsActive(false);
+    // Already fullscreen → exit.
+    if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+      (doc.exitFullscreen ?? doc.webkitExitFullscreen)?.call(doc);
       return;
     }
 
-    // Enter our own fullscreen. In portrait the container rotates to landscape
-    // via CSS (see the container style) so the logo overlay stays visible —
-    // never the native video player.
-    setFsActive(true);
-
-    // Enhancement only: where the element Fullscreen API genuinely works
-    // (desktop, Android, iPadOS) also enter real fullscreen to hide the browser
-    // chrome and lock landscape. Our overlay rides along because the CONTAINER
-    // is the fullscreen element. iPhone's flags are false, so it stays pure CSS.
-    if (document.fullscreenEnabled && node.requestFullscreen) {
+    // Fullscreen the CONTAINER (not the raw <video>) so our logo overlay + custom
+    // controls ride along. Desktop/Android/iPadOS support element fullscreen.
+    if (node.requestFullscreen) {
       node.requestFullscreen().catch(() => undefined);
-    } else if (doc.webkitFullscreenEnabled && node.webkitRequestFullscreen) {
+    } else if (node.webkitRequestFullscreen) {
       node.webkitRequestFullscreen();
+    } else if (video?.webkitEnterFullscreen) {
+      // iPhone Safari can't fullscreen a wrapper <div> — only the <video> itself.
+      // Fall back to the native video player there (real fullscreen + landscape).
+      video.webkitEnterFullscreen();
     }
-  }, [fsActive]);
+  }, [videoRef]);
 
   const togglePip = useCallback(async () => {
     const v = videoRef.current;
@@ -328,10 +318,6 @@ export function VideoPlayer({
         doc.fullscreenElement ?? doc.webkitFullscreenElement,
       );
       setIsFullscreen(active);
-      // If real fullscreen was dismissed by the system (Esc, back gesture),
-      // drop our custom mode too so the icon and rotation reset. iPhone never
-      // enters real fullscreen, so this leaves its CSS mode untouched.
-      if (!active && document.fullscreenEnabled) setFsActive(false);
     }
     document.addEventListener("fullscreenchange", onFs);
     document.addEventListener("webkitfullscreenchange", onFs);
@@ -342,7 +328,7 @@ export function VideoPlayer({
   }, []);
 
   // In real (element) fullscreen — desktop/Android/iPadOS — lock the screen to
-  // landscape. iPhone never gets here; it rotates via CSS instead (below).
+  // landscape. iPhone uses the native video player, which handles this itself.
   useEffect(() => {
     if (!isFullscreen) return;
     const orientation = screen.orientation as ScreenOrientation & {
@@ -353,37 +339,12 @@ export function VideoPlayer({
     return () => orientation?.unlock?.();
   }, [isFullscreen]);
 
-  // Track portrait vs landscape so the custom fullscreen rotates only when the
-  // phone is actually held portrait.
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(orientation: portrait)");
-    const update = () => setIsPortrait(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-
-  // Our custom fullscreen: lock the page scroll behind the player and recompute
-  // the watermark frame once the (possibly rotated) layout has settled.
-  useEffect(() => {
-    if (!fsActive) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    computeFrame();
-    const raf = requestAnimationFrame(computeFrame);
-    return () => {
-      document.body.style.overflow = prev;
-      cancelAnimationFrame(raf);
-    };
-  }, [fsActive, computeFrame]);
-
-  // Recompute the watermark frame whenever the fullscreen / rotation flips.
+  // Recompute the watermark frame whenever fullscreen flips.
   useEffect(() => {
     computeFrame();
     const raf = requestAnimationFrame(computeFrame);
     return () => cancelAnimationFrame(raf);
-  }, [fsActive, isPortrait, isFullscreen, computeFrame]);
+  }, [isFullscreen, computeFrame]);
 
   // Picture-in-picture state (events not typed on React's <video>).
   useEffect(() => {
@@ -490,15 +451,7 @@ export function VideoPlayer({
   const volumeIcon =
     muted || volume === 0 ? "mute" : volume < 0.5 ? "low" : "high";
 
-  // "In fullscreen" for the icon = real element fullscreen OR our custom mode.
-  const inFullscreen = isFullscreen || fsActive;
-  // Custom fullscreen on a portrait-held phone (no real element fullscreen
-  // available) → rotate the whole player 90° to landscape so the video is big
-  // with the logo overlay intact. dvw/dvh track the *visible* viewport (they
-  // shrink for the Safari toolbars), so the rotated box fills what's on screen
-  // instead of overflowing like static vw/vh did. Turning the phone landscape
-  // clears isPortrait and drops the transform.
-  const rotateFs = fsActive && !isFullscreen && isPortrait;
+  const inFullscreen = isFullscreen;
 
   return (
     <div
@@ -509,16 +462,6 @@ export function VideoPlayer({
       className={`fixed inset-0 z-[9999] select-none overflow-hidden bg-black ${
         !visible && playing ? "cursor-none" : ""
       }`}
-      style={
-        rotateFs
-          ? {
-              width: "100dvh",
-              height: "100dvw",
-              transform: "translateX(100dvw) rotate(90deg)",
-              transformOrigin: "top left",
-            }
-          : undefined
-      }
     >
       {/* Video */}
       <video
