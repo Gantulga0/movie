@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { billingApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { PaymentCheck, PaymentInvoice } from "@/lib/types";
@@ -45,17 +45,17 @@ export function PaymentModal({
   const { token } = useAuth();
   const [paid, setPaid] = useState(false);
   const [openHint, setOpenHint] = useState(false);
-  const [inAppBrowser, setInAppBrowser] = useState(false);
 
   // Facebook/Instagram/Messenger-ийн доторх browser банкны custom-scheme
-  // deeplink нээхийг хориглодог — урьдчилж анхааруулна.
-  useEffect(() => {
-    setInAppBrowser(
+  // deeplink нээхийг хориглодог — урьдчилж анхааруулна. (Сервер дээр false.)
+  const inAppBrowser = useSyncExternalStore(
+    () => () => {},
+    () =>
       /FBAN|FBAV|FB_IAB|Instagram|Messenger|Line\/|MicroMessenger|TikTok|musical_ly|Snapchat/i.test(
         navigator.userAgent,
       ),
-    );
-  }, []);
+    () => false,
+  );
 
   // Reset the success state when a new invoice comes in.
   useEffect(() => {
@@ -73,7 +73,7 @@ export function PaymentModal({
     setTimeout(() => {
       if (document.visibilityState === "visible") setOpenHint(true);
     }, 2000);
-    window.location.href = link;
+    window.location.assign(link);
   }
 
   // Poll until the payment lands while the dialog is open.
