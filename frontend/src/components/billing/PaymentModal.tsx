@@ -44,11 +44,37 @@ export function PaymentModal({
 }: PaymentModalProps) {
   const { token } = useAuth();
   const [paid, setPaid] = useState(false);
+  const [openHint, setOpenHint] = useState(false);
+  const [inAppBrowser, setInAppBrowser] = useState(false);
+
+  // Facebook/Instagram/Messenger-ийн доторх browser банкны custom-scheme
+  // deeplink нээхийг хориглодог — урьдчилж анхааруулна.
+  useEffect(() => {
+    setInAppBrowser(
+      /FBAN|FBAV|FB_IAB|Instagram|Messenger|Line\/|MicroMessenger|TikTok|musical_ly|Snapchat/i.test(
+        navigator.userAgent,
+      ),
+    );
+  }, []);
 
   // Reset the success state when a new invoice comes in.
   useEffect(() => {
     queueMicrotask(() => setPaid(false));
   }, [paymentId]);
+
+  /**
+   * Custom-scheme deeplink: top-frame navigation is the most reliable way
+   * across devices. If the app opened, the page goes hidden — if we're still
+   * visible after the grace period, the scheme wasn't handled (app not
+   * installed / blocked browser), so show a hint instead of failing silently.
+   */
+  function openBankApp(link: string) {
+    setOpenHint(false);
+    setTimeout(() => {
+      if (document.visibilityState === "visible") setOpenHint(true);
+    }, 2000);
+    window.location.href = link;
+  }
 
   // Poll until the payment lands while the dialog is open.
   useEffect(() => {
@@ -106,6 +132,16 @@ export function PaymentModal({
 
           {/* Body — the only scroll region */}
           <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-6 sm:px-7">
+            {inAppBrowser ? (
+              <div className="mb-4 rounded-lg border border-gold/30 bg-gold/10 px-3.5 py-2.5 text-xs leading-relaxed text-gold">
+                Та Facebook/Instagram доторх browser ашиглаж байгаа тул банкны
+                апп нээгдэхгүй байж магадгүй. Баруун дээд цэснээс{" "}
+                <span className="font-semibold">
+                  “Open in browser / Хөтчөөр нээх”
+                </span>
+                -ийг сонгоно уу.
+              </div>
+            ) : null}
             {invoice.qrImage ? (
               <div className="flex flex-col items-center">
                 <div className="rounded-2xl bg-white p-3.5 shadow-[0_8px_30px_rgba(3,6,18,0.5)] ring-1 ring-black/5">
@@ -149,6 +185,10 @@ export function PaymentModal({
                     <a
                       key={u.name}
                       href={u.link}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        openBankApp(u.link);
+                      }}
                       title={u.description || u.name}
                       className="group flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-line bg-white/[0.03] p-2 transition active:scale-95 hover:-translate-y-0.5 hover:border-accent/50 hover:bg-white/[0.07]"
                     >
@@ -174,6 +214,13 @@ export function PaymentModal({
                     </a>
                   ))}
                 </div>
+                {openHint ? (
+                  <p className="mt-3 rounded-lg border border-gold/30 bg-gold/10 px-3.5 py-2.5 text-center text-xs leading-relaxed text-gold">
+                    Банкны апп нээгдсэнгүй юу? Тухайн банкны апп суусан эсэхийг
+                    шалгаарай — эсвэл өөр төхөөрөмжөөс дээрх QR кодыг
+                    уншуулаарай.
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </div>

@@ -92,19 +92,23 @@ function PlansContent() {
 
   const active = mine?.active ?? null;
 
+  // "Тест …" plans (1₮ payment-flow checks) stay out of the pricing math so
+  // they can't skew the per-month baseline or steal the best-value badge.
+  const pricedPlans = plans.filter((p) => !p.name.startsWith("Тест"));
+
   // Per-month framing: everything is compared against the shortest plan.
   const monthsOf = (p: Plan) => Math.max(1, Math.round(p.durationDay / 30));
   const perMonthOf = (p: Plan) => Math.round(p.price / monthsOf(p));
   const basePerMonth =
-    plans.length > 0
+    pricedPlans.length > 0
       ? perMonthOf(
-          plans.reduce((a, b) => (a.durationDay <= b.durationDay ? a : b)),
+          pricedPlans.reduce((a, b) => (a.durationDay <= b.durationDay ? a : b)),
         )
       : 0;
   // "Best value" = the cheapest month; on a tie the longer plan wins.
   const bestId =
-    plans.length > 1
-      ? plans.reduce((a, b) =>
+    pricedPlans.length > 1
+      ? pricedPlans.reduce((a, b) =>
           perMonthOf(b) < perMonthOf(a) ||
           (perMonthOf(b) === perMonthOf(a) && b.durationDay > a.durationDay)
             ? b
@@ -180,7 +184,7 @@ function PlansContent() {
               plan={plan}
               months={monthsOf(plan)}
               perMonth={perMonthOf(plan)}
-              basePerMonth={basePerMonth}
+              basePerMonth={plan.name.startsWith("Тест") ? 0 : basePerMonth}
               isBest={plan.id === bestId}
               renewing={Boolean(active)}
               busy={paying !== null}
