@@ -71,6 +71,9 @@ export class ActivityService {
             season: { select: { number: true } },
           },
         },
+        chapter: {
+          select: { id: true, number: true, title: true },
+        },
       },
     });
   }
@@ -82,8 +85,9 @@ export class ActivityService {
   }
 
   /**
-   * Records playback progress. Manual find-then-write because the compound
-   * unique contains a nullable episodeId, which Prisma upsert can't target.
+   * Records playback/reading progress. Manual find-then-write because the
+   * compound unique contains nullable episodeId/chapterId columns, which
+   * Prisma upsert can't target.
    */
   async upsertHistory(userId: string, dto: UpsertHistoryDto) {
     const existing = await this.prisma.watchHistory.findFirst({
@@ -91,6 +95,7 @@ export class ActivityService {
         userId,
         contentId: dto.contentId,
         episodeId: dto.episodeId ?? null,
+        chapterId: dto.chapterId ?? null,
       },
     });
 
@@ -109,6 +114,7 @@ export class ActivityService {
         userId,
         contentId: dto.contentId,
         episodeId: dto.episodeId ?? null,
+        chapterId: dto.chapterId ?? null,
         progressSec: dto.progressSec,
         completed: dto.completed ?? false,
       },

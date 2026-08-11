@@ -1,13 +1,16 @@
 import type {
+  AdminChapter,
   AdminStats,
   AdminUser,
   AdminUserDetail,
   AuthResult,
+  ChapterDetail,
   CheckoutResult,
   Content,
   ContentAccess,
   ContentDetail,
   ContentSort,
+  ContentType,
   Genre,
   HistoryItem,
   MySubscription,
@@ -180,7 +183,7 @@ export const authApi = {
 };
 
 export interface ContentListParams {
-  type?: "MOVIE" | "SERIES";
+  type?: ContentType;
   genre?: string;
   country?: string;
   search?: string;
@@ -227,6 +230,10 @@ export const contentApi = {
       `/content/${id}/watch${qs({ episodeId })}`,
       { token },
     ),
+
+  /** Chapter body — free chapters need a login, the rest a subscription. */
+  chapter: (id: string, chapterId: string, token: string) =>
+    apiFetch<ChapterDetail>(`/content/${id}/chapters/${chapterId}`, { token }),
 };
 
 export const billingApi = {
@@ -310,6 +317,7 @@ export const activityApi = {
     payload: {
       contentId: string;
       episodeId?: string;
+      chapterId?: string;
       progressSec: number;
       completed?: boolean;
     },
@@ -372,6 +380,24 @@ export const adminApi = {
 
   removeEpisode: (token: string, episodeId: string) =>
     apiFetch(`/content/episodes/${episodeId}`, { method: "DELETE", token }),
+
+  chapterGet: (token: string, chapterId: string) =>
+    apiFetch<AdminChapter>(`/content/admin/chapters/${chapterId}`, { token }),
+
+  addChapter: (
+    token: string,
+    contentId: string,
+    body: { number: number; title: string; body: string },
+  ) => apiFetch(`/content/${contentId}/chapters`, { method: "POST", body, token }),
+
+  updateChapter: (
+    token: string,
+    chapterId: string,
+    body: { number?: number; title?: string; body?: string },
+  ) => apiFetch(`/content/chapters/${chapterId}`, { method: "PATCH", body, token }),
+
+  removeChapter: (token: string, chapterId: string) =>
+    apiFetch(`/content/chapters/${chapterId}`, { method: "DELETE", token }),
 
   addVideoAsset: (token: string, contentId: string, body: unknown) =>
     apiFetch(`/content/${contentId}/video-assets`, { method: "POST", body, token }),

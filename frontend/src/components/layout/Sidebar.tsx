@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import {
+  IconBook,
   IconBookmark,
   IconChevronRight,
   IconClapperboard,
@@ -40,6 +41,12 @@ const MAIN_ITEMS: NavItem[] = [
     label: "Цуврал",
     icon: IconSeriesPlay,
     query: { key: "type", value: "SERIES" },
+  },
+  {
+    href: "/browse?type=NOVEL",
+    label: "Бичвэр",
+    icon: IconBook,
+    query: { key: "type", value: "NOVEL" },
   },
   { href: "/my-list", label: "Миний жагсаалт", icon: IconBookmark },
   { href: "/rentals", label: "Түрээс", icon: IconTicket },

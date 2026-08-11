@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import {
   ContentStatus,
+  ContentType,
   Prisma,
   Role,
   SubscriptionStatus,
@@ -18,6 +20,7 @@ import { UpdateContentDto } from './dto/update-content.dto';
 import { ContentSort, QueryContentDto } from './dto/query-content.dto';
 import { CreateEpisodeDto, CreateSeasonDto } from './dto/season-episode.dto';
 import { CreateSubtitleDto, CreateVideoAssetDto } from './dto/video-asset.dto';
+import { CreateChapterDto, UpdateChapterDto } from './dto/chapter.dto';
 
 const DEFAULT_PAGE_SIZE = 24;
 const RELATED_LIMIT = 12;
@@ -209,6 +212,11 @@ export class ContentService {
           // Which qualities exist is public; the URLs are not.
           videoAssets: { select: { id: true, quality: true } },
           subtitles: { select: { id: true, language: true, label: true } },
+          // Chapter bodies stay behind the entitlement-checked read route.
+          chapters: {
+            orderBy: { number: 'asc' },
+            select: { id: true, number: true, title: true, createdAt: true },
+          },
         },
         relationLoadStrategy: 'join',
       }),
@@ -236,6 +244,9 @@ export class ContentService {
     });
     if (!content) {
       throw new NotFoundException('Контент олдсонгүй');
+    }
+    if (content.type === ContentType.NOVEL) {
+      throw new BadRequestException('Бичвэр контентыг тоглуулах боломжгүй');
     }
 
     // The EntitlementGuard checks access to `contentId`; make sure the
@@ -289,6 +300,82 @@ export class ContentService {
     };
   }
 
+  /**
+   * A chapter with its body. The first `freeChapterCount` chapters are open
+   * to any signed-in user; the rest require a live subscription (admins
+   * bypass). Errors reuse the EntitlementGuard's shape so the frontend's
+   * ApiError.code handling works unchanged.
+   */
+  async readChapter(contentId: string, chapterId: string, user: SafeUser) {
+    const adminView = user.role === Role.ADMIN;
+    const [content, chapter] = await Promise.all([
+      this.prisma.content.findFirst({
+        where: {
+          id: contentId,
+          ...(adminView ? {} : { status: ContentStatus.PUBLISHED }),
+        },
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+          type: true,
+          freeChapterCount: true,
+          subscriptionIncluded: true,
+        },
+      }),
+      // The contentId match blocks reading another title's chapters (IDOR).
+      this.prisma.chapter.findFirst({
+        where: { id: chapterId, contentId },
+      }),
+    ]);
+    if (!content || content.type !== ContentType.NOVEL) {
+      throw new NotFoundException('Контент олдсонгүй');
+    }
+    if (!chapter) {
+      throw new NotFoundException('Бүлэг олдсонгүй');
+    }
+
+    const isFree = chapter.number <= content.freeChapterCount;
+    if (!isFree && !adminView) {
+      const subscription = content.subscriptionIncluded
+        ? await this.prisma.subscription.findFirst({
+            where: {
+              userId: user.id,
+              status: SubscriptionStatus.ACTIVE,
+              endsAt: { gt: new Date() },
+            },
+            select: { id: true },
+          })
+        : null;
+      if (!subscription) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          error: 'SUBSCRIPTION_REQUIRED',
+          message: 'Энэ бүлгийг уншихын тулд эрхийн багц идэвхжүүлнэ үү.',
+        });
+      }
+    }
+
+    const siblings = await this.prisma.chapter.findMany({
+      where: { contentId },
+      select: { id: true },
+      orderBy: { number: 'asc' },
+    });
+    const index = siblings.findIndex((c) => c.id === chapter.id);
+
+    return {
+      id: chapter.id,
+      number: chapter.number,
+      title: chapter.title,
+      body: chapter.body,
+      contentId: content.id,
+      isFree,
+      content: { title: content.title, slug: content.slug },
+      prevId: index > 0 ? siblings[index - 1].id : null,
+      nextId: index < siblings.length - 1 ? siblings[index + 1].id : null,
+    };
+  }
+
   /** Signed R2 GET URL when possible, otherwise the stored URL. */
   private async resolvePlaybackUrl(
     r2Key: string | null,
@@ -324,6 +411,9 @@ export class ContentService {
   // ----------------------------------------------------------------- admin
 
   async create(dto: CreateContentDto) {
+    if (dto.type === ContentType.NOVEL && dto.isRentable) {
+      throw new BadRequestException('Бичвэр контентыг түрээслүүлэх боломжгүй');
+    }
     if (dto.isRentable && !dto.rentalPrice) {
       throw new BadRequestException('Түрээслэх бол түрээсийн үнэ шаардлагатай');
     }
@@ -359,6 +449,10 @@ export class ContentService {
   async update(id: string, dto: UpdateContentDto) {
     const existing = await this.requireContent(id);
     const willBeRentable = dto.isRentable ?? existing.isRentable;
+    const effectiveType = dto.type ?? existing.type;
+    if (effectiveType === ContentType.NOVEL && willBeRentable) {
+      throw new BadRequestException('Бичвэр контентыг түрээслүүлэх боломжгүй');
+    }
     const effectivePrice = dto.rentalPrice ?? existing.rentalPrice;
     if (willBeRentable && !effectivePrice) {
       throw new BadRequestException('Түрээслэх бол түрээсийн үнэ шаардлагатай');
@@ -418,6 +512,61 @@ export class ContentService {
   async removeEpisode(episodeId: string) {
     await this.prisma.episode.delete({ where: { id: episodeId } }).catch(() => {
       throw new NotFoundException('Анги олдсонгүй');
+    });
+    return { success: true };
+  }
+
+  // Chapters -----------------------------------------------------------------
+
+  async addChapter(contentId: string, dto: CreateChapterDto) {
+    const content = await this.requireContent(contentId);
+    if (content.type !== ContentType.NOVEL) {
+      throw new BadRequestException('Зөвхөн бичвэр контентод бүлэг нэмнэ');
+    }
+    try {
+      return await this.prisma.chapter.create({ data: { contentId, ...dto } });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new BadRequestException('Бүлгийн дугаар давхардаж байна');
+      }
+      throw err;
+    }
+  }
+
+  /** Full chapter (with body) for the admin editor. */
+  async getChapterAdmin(chapterId: string) {
+    const chapter = await this.prisma.chapter.findUnique({
+      where: { id: chapterId },
+    });
+    if (!chapter) throw new NotFoundException('Бүлэг олдсонгүй');
+    return chapter;
+  }
+
+  async updateChapter(chapterId: string, dto: UpdateChapterDto) {
+    try {
+      return await this.prisma.chapter.update({
+        where: { id: chapterId },
+        data: dto,
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === 'P2002') {
+          throw new BadRequestException('Бүлгийн дугаар давхардаж байна');
+        }
+        if (err.code === 'P2025') {
+          throw new NotFoundException('Бүлэг олдсонгүй');
+        }
+      }
+      throw err;
+    }
+  }
+
+  async removeChapter(chapterId: string) {
+    await this.prisma.chapter.delete({ where: { id: chapterId } }).catch(() => {
+      throw new NotFoundException('Бүлэг олдсонгүй');
     });
     return { success: true };
   }

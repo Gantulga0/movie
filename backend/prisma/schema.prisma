@@ -143,8 +143,12 @@ model Content {
   // Shown in the landing/home hero carousel.
   featured Boolean @default(false)
 
+  // NOVEL only: the first N chapters are readable without a subscription.
+  freeChapterCount Int @default(0)
+
   genres       ContentGenre[]
   seasons      Season[]
+  chapters     Chapter[]
   videoAssets  VideoAsset[]
   subtitles    Subtitle[]
   watchHistory WatchHistory[]
@@ -259,6 +263,23 @@ model Subtitle {
   @@index([episodeId])
 }
 
+// A light-novel chapter. Body is plain text; paragraphs split on blank lines.
+model Chapter {
+  id        String @id @default(uuid())
+  contentId String
+  number    Int
+  title     String
+  body      String
+
+  content      Content        @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  watchHistory WatchHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([contentId, number])
+}
+
 // ---------------------------------------------------------------------------
 // User activity
 // ---------------------------------------------------------------------------
@@ -269,6 +290,7 @@ model WatchHistory {
   userId    String
   contentId String
   episodeId String?
+  chapterId String?
 
   progressSec Int      @default(0)
   completed   Boolean  @default(false)
@@ -277,8 +299,9 @@ model WatchHistory {
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   content Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
   episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  chapter Chapter? @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, contentId, episodeId])
+  @@unique([userId, contentId, episodeId, chapterId])
   @@index([userId, watchedAt])
 }
 
@@ -420,6 +443,7 @@ enum Role {
 enum ContentType {
   MOVIE
   SERIES
+  NOVEL
 }
 
 enum ContentStatus {

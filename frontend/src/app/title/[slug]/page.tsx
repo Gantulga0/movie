@@ -14,7 +14,9 @@ import { Button, ButtonLink } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ChapterList } from "@/components/details/ChapterList";
 import {
+  IconBook,
   IconCheck,
   IconClock,
   IconPlay,
@@ -34,6 +36,7 @@ import {
   formatDuration,
   formatHours,
   formatRemaining,
+  typeLabel,
   watchedPercent,
 } from "@/lib/format";
 
@@ -208,12 +211,18 @@ function TitleContent() {
   }
 
   const isSeries = content.type === "SERIES";
+  const isNovel = content.type === "NOVEL";
   const firstEpisode = content.seasons[0]?.episodes[0];
-  const watchHref = resume?.episode
-    ? `/watch/${content.id}?episodeId=${resume.episode.id}`
-    : isSeries && firstEpisode
-      ? `/watch/${content.id}?episodeId=${firstEpisode.id}`
-      : `/watch/${content.id}`;
+  const novelResume = isNovel
+    ? (history.find((h) => h.content.id === content.id && h.chapter) ?? null)
+    : null;
+  const watchHref = isNovel
+    ? `/read/${content.id}`
+    : resume?.episode
+      ? `/watch/${content.id}?episodeId=${resume.episode.id}`
+      : isSeries && firstEpisode
+        ? `/watch/${content.id}?episodeId=${firstEpisode.id}`
+        : `/watch/${content.id}`;
 
   const canWatch = access?.canWatch ?? user?.role === "ADMIN";
   const showAccessOptions = Boolean(access && !canWatch);
@@ -271,7 +280,7 @@ function TitleContent() {
           {/* Meta */}
           <div className="max-w-2xl">
             <p className="text-xs font-bold uppercase tracking-[0.25em] text-accent">
-              {isSeries ? "Цуврал" : "Кино"}
+              {typeLabel(content.type)}
             </p>
             <h1 className="display mt-2 text-4xl font-bold leading-none text-foreground drop-shadow-lg sm:text-5xl">
               {content.title}
@@ -302,6 +311,7 @@ function TitleContent() {
                   {content.seasons.reduce((n, s) => n + s.episodes.length, 0)} анги
                 </span>
               ) : null}
+              {isNovel ? <span>{content.chapters.length} бүлэг</span> : null}
               <Badge
                 tone={content.releaseStatus === "RELEASING" ? "teal" : "default"}
               >
@@ -371,7 +381,14 @@ function TitleContent() {
 
             {/* Actions */}
             <div className="mt-7 flex flex-wrap items-center gap-2.5">
-              {canWatch ? (
+              {isNovel ? (
+                canWatch || content.freeChapterCount > 0 ? (
+                  <ButtonLink href={watchHref} variant="primary" size="lg">
+                    <IconBook size={18} />
+                    {novelResume ? "Үргэлжлүүлэн унших" : "Унших"}
+                  </ButtonLink>
+                ) : null
+              ) : canWatch ? (
                 <ButtonLink href={watchHref} variant="primary" size="lg">
                   <IconPlay size={18} />
                   {resume ? "Үргэлжлүүлэх" : "Үзэх"}
@@ -485,6 +502,17 @@ function TitleContent() {
               </div>
             </div>
           ))}
+        </section>
+      ) : null}
+
+      {/* Chapters (novel) */}
+      {isNovel && content.chapters.length > 0 ? (
+        <section className="px-5 py-10 sm:px-10">
+          <ChapterList
+            content={content}
+            history={history}
+            canWatch={Boolean(canWatch)}
+          />
         </section>
       ) : null}
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { adminApi } from "@/lib/api";
 import type { Content } from "@/lib/types";
-import { formatDate } from "@/lib/format";
+import { formatDate, typeLabel } from "@/lib/format";
 
 const STATUS_LABEL: Record<string, [string, string]> = {
   PUBLISHED: ["Нийтэлсэн", "text-green-400"],
@@ -148,7 +148,7 @@ export default function AdminContentPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-white/70">
-                      {c.type === "SERIES" ? "Цуврал" : "Кино"}
+                      {typeLabel(c.type)}
                     </td>
                     <td className="px-4 py-3 text-white/70">{c.releaseYear ?? "—"}</td>
                     <td className={`px-4 py-3 text-xs font-semibold ${cls}`}>{label}</td>

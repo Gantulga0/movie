@@ -7,7 +7,7 @@ import type { ContentDetail, Genre } from "@/lib/types";
 export interface ContentFormValues {
   title: string;
   originalTitle: string;
-  type: "MOVIE" | "SERIES";
+  type: "MOVIE" | "SERIES" | "NOVEL";
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   releaseStatus: "RELEASING" | "COMPLETED";
   description: string;
@@ -20,6 +20,8 @@ export interface ContentFormValues {
   cast: string;
   featured: boolean;
   genres: string[];
+  // Novel settings
+  freeChapterCount: string;
   // Rental settings
   isRentable: boolean;
   rentalPrice: string;
@@ -28,6 +30,7 @@ export interface ContentFormValues {
 }
 
 export function toPayload(values: ContentFormValues) {
+  const isNovel = values.type === "NOVEL";
   return {
     title: values.title.trim(),
     originalTitle: values.originalTitle.trim() || undefined,
@@ -36,24 +39,33 @@ export function toPayload(values: ContentFormValues) {
     releaseStatus: values.releaseStatus,
     description: values.description.trim() || undefined,
     releaseYear: values.releaseYear ? Number(values.releaseYear) : undefined,
-    durationSec: values.durationMin
-      ? Number(values.durationMin) * 60
-      : undefined,
+    durationSec:
+      !isNovel && values.durationMin
+        ? Number(values.durationMin) * 60
+        : undefined,
     ageRating: values.ageRating.trim() || undefined,
     language: values.language.trim() || undefined,
     country: values.country.trim() || undefined,
-    director: values.director.trim() || undefined,
-    cast: values.cast
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
+    director: isNovel ? undefined : values.director.trim() || undefined,
+    cast: isNovel
+      ? []
+      : values.cast
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
     featured: values.featured,
     genres: values.genres,
-    isRentable: values.isRentable,
-    rentalPrice: values.rentalPrice ? Number(values.rentalPrice) : undefined,
-    rentalDurationHours: values.rentalDurationHours
-      ? Number(values.rentalDurationHours)
+    freeChapterCount: isNovel
+      ? Number(values.freeChapterCount) || 0
       : undefined,
+    // Novels are never rentable — the paywall is subscription-only.
+    isRentable: isNovel ? false : values.isRentable,
+    rentalPrice:
+      !isNovel && values.rentalPrice ? Number(values.rentalPrice) : undefined,
+    rentalDurationHours:
+      !isNovel && values.rentalDurationHours
+        ? Number(values.rentalDurationHours)
+        : undefined,
     subscriptionIncluded: values.subscriptionIncluded,
   };
 }
@@ -77,6 +89,7 @@ export function fromContent(content: ContentDetail): ContentFormValues {
     cast: content.cast.join(", "),
     featured: content.featured,
     genres: content.genres.map((g) => g.genre.name),
+    freeChapterCount: String(content.freeChapterCount ?? 0),
     isRentable: content.isRentable,
     rentalPrice: content.rentalPrice ? String(content.rentalPrice) : "",
     rentalDurationHours: String(content.rentalDurationHours ?? 48),
@@ -100,6 +113,7 @@ export const EMPTY_FORM: ContentFormValues = {
   cast: "",
   featured: false,
   genres: [],
+  freeChapterCount: "0",
   isRentable: false,
   rentalPrice: "",
   rentalDurationHours: "48",
@@ -194,10 +208,13 @@ export function ContentForm({
             id="cf-type"
             className={input}
             value={values.type}
-            onChange={(e) => set("type", e.target.value as "MOVIE" | "SERIES")}
+            onChange={(e) =>
+              set("type", e.target.value as ContentFormValues["type"])
+            }
           >
             <option value="MOVIE">Кино</option>
             <option value="SERIES">Цуврал</option>
+            <option value="NOVEL">Бичвэр</option>
           </select>
         </div>
 
@@ -239,18 +256,20 @@ export function ContentForm({
           </select>
         </div>
 
-        <div>
-          <label htmlFor="cf-director" className={label}>
-            Найруулагч
-          </label>
-          <input
-            id="cf-director"
-            className={input}
-            value={values.director}
-            onChange={(e) => set("director", e.target.value)}
-            placeholder="Chad Stahelski"
-          />
-        </div>
+        {values.type !== "NOVEL" ? (
+          <div>
+            <label htmlFor="cf-director" className={label}>
+              Найруулагч
+            </label>
+            <input
+              id="cf-director"
+              className={input}
+              value={values.director}
+              onChange={(e) => set("director", e.target.value)}
+              placeholder="Chad Stahelski"
+            />
+          </div>
+        ) : null}
 
         <div className="sm:col-span-2">
           <label htmlFor="cf-desc" className={label}>
@@ -279,19 +298,39 @@ export function ContentForm({
           />
         </div>
 
-        <div>
-          <label htmlFor="cf-duration" className={label}>
-            Үргэлжлэх (минут)
-          </label>
-          <input
-            id="cf-duration"
-            type="number"
-            className={input}
-            value={values.durationMin}
-            onChange={(e) => set("durationMin", e.target.value)}
-            placeholder="120"
-          />
-        </div>
+        {values.type !== "NOVEL" ? (
+          <div>
+            <label htmlFor="cf-duration" className={label}>
+              Үргэлжлэх (минут)
+            </label>
+            <input
+              id="cf-duration"
+              type="number"
+              className={input}
+              value={values.durationMin}
+              onChange={(e) => set("durationMin", e.target.value)}
+              placeholder="120"
+            />
+          </div>
+        ) : (
+          <div>
+            <label htmlFor="cf-free-chapters" className={label}>
+              Үнэгүй бүлгийн тоо
+            </label>
+            <input
+              id="cf-free-chapters"
+              type="number"
+              min={0}
+              className={input}
+              value={values.freeChapterCount}
+              onChange={(e) => set("freeChapterCount", e.target.value)}
+              placeholder="2"
+            />
+            <p className="mt-1 text-xs text-white/45">
+              Эхний хэдэн бүлэг эрхгүй хэрэглэгчид үнэгүй уншигдахыг заана.
+            </p>
+          </div>
+        )}
 
         <div>
           <label htmlFor="cf-age" className={label}>
@@ -319,18 +358,20 @@ export function ContentForm({
           />
         </div>
 
-        <div className="sm:col-span-2">
-          <label htmlFor="cf-cast" className={label}>
-            Гол дүрд (таслалаар тусгаарлана)
-          </label>
-          <input
-            id="cf-cast"
-            className={input}
-            value={values.cast}
-            onChange={(e) => set("cast", e.target.value)}
-            placeholder="Keanu Reeves, Donnie Yen"
-          />
-        </div>
+        {values.type !== "NOVEL" ? (
+          <div className="sm:col-span-2">
+            <label htmlFor="cf-cast" className={label}>
+              Гол дүрд (таслалаар тусгаарлана)
+            </label>
+            <input
+              id="cf-cast"
+              className={input}
+              value={values.cast}
+              onChange={(e) => set("cast", e.target.value)}
+              placeholder="Keanu Reeves, Donnie Yen"
+            />
+          </div>
+        ) : null}
 
         {/* Genres */}
         <div className="sm:col-span-2">
@@ -387,19 +428,26 @@ export function ContentForm({
             </span>
           </label>
 
-          <label className="mt-3 flex cursor-pointer items-center gap-2.5">
-            <input
-              type="checkbox"
-              checked={values.isRentable}
-              onChange={(e) => set("isRentable", e.target.checked)}
-              className="h-4 w-4 accent-(--accent)"
-            />
-            <span className="text-sm text-white/80">
-              Түрээслэх боломжтой — нэг удаагийн төлбөрөөр үзнэ
-            </span>
-          </label>
+          {values.type !== "NOVEL" ? (
+            <label className="mt-3 flex cursor-pointer items-center gap-2.5">
+              <input
+                type="checkbox"
+                checked={values.isRentable}
+                onChange={(e) => set("isRentable", e.target.checked)}
+                className="h-4 w-4 accent-(--accent)"
+              />
+              <span className="text-sm text-white/80">
+                Түрээслэх боломжтой — нэг удаагийн төлбөрөөр үзнэ
+              </span>
+            </label>
+          ) : (
+            <p className="mt-3 text-xs text-white/45">
+              Бичвэр контент түрээслэгдэхгүй — эхний бүлгүүд үнэгүй, үлдсэн нь
+              эрхийн багцаар нээгдэнэ.
+            </p>
+          )}
 
-          {values.isRentable ? (
+          {values.type !== "NOVEL" && values.isRentable ? (
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="cf-rental-price" className={label}>
@@ -434,7 +482,8 @@ export function ContentForm({
             </div>
           ) : null}
 
-          {!values.subscriptionIncluded && !values.isRentable ? (
+          {!values.subscriptionIncluded &&
+          (values.type === "NOVEL" || !values.isRentable) ? (
             <p className="mt-3 text-xs text-gold">
               Анхаар: багцад ч багтахгүй, түрээслэгдэхгүй бол энэ контентыг
               хэн ч үзэж чадахгүй (түр хаагдсан төлөв).
@@ -448,7 +497,7 @@ export function ContentForm({
         disabled={
           submitting ||
           !values.title.trim() ||
-          (values.isRentable && !values.rentalPrice)
+          (values.type !== "NOVEL" && values.isRentable && !values.rentalPrice)
         }
         className="mt-7 rounded-lg bg-brand px-7 py-3 text-base font-bold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
       >

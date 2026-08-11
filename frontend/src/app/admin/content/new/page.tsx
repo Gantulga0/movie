@@ -17,6 +17,7 @@ import {
   SeasonsSection,
   VideoAssetsSection,
 } from "@/components/AdminMedia";
+import { ChaptersSection } from "@/components/AdminChapters";
 
 /**
  * Two-step create: 1) basic info, 2) poster/backdrop/trailer/video uploads
@@ -65,13 +66,17 @@ export default function NewContentPage() {
           <span className="text-sm font-semibold text-green-400">Үүслээ ✓</span>
         </div>
         <p className="mt-1 text-sm text-white/50">
-          2-р алхам — зураг, трейлер, видео файлуудаа оруулна уу.
+          {created.type === "NOVEL"
+            ? "2-р алхам — зураг болон бүлгүүдээ оруулна уу."
+            : "2-р алхам — зураг, трейлер, видео файлуудаа оруулна уу."}
         </p>
 
         <div className="mt-6 grid max-w-4xl gap-6 lg:grid-cols-2">
           <MediaSection content={created} onChanged={reload} />
           {created.type === "SERIES" ? (
             <SeasonsSection content={created} onChanged={reload} />
+          ) : created.type === "NOVEL" ? (
+            <ChaptersSection content={created} onChanged={reload} />
           ) : (
             <VideoAssetsSection
               contentId={created.id}

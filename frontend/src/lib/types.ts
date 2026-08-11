@@ -1,5 +1,5 @@
 export type Role = "USER" | "ADMIN";
-export type ContentType = "MOVIE" | "SERIES";
+export type ContentType = "MOVIE" | "SERIES" | "NOVEL";
 export type ContentStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 export type ReleaseStatus = "RELEASING" | "COMPLETED";
 export type ContentSort = "new" | "year" | "title" | "watched" | "rated";
@@ -78,6 +78,38 @@ export interface Season {
   episodes: EpisodeSummary[];
 }
 
+/** Chapter row in the detail payload — the body stays behind the read route. */
+export interface ChapterSummary {
+  id: string;
+  number: number;
+  title: string;
+  createdAt: string;
+}
+
+/** Raw chapter row (with body) from the admin editor endpoint. */
+export interface AdminChapter {
+  id: string;
+  contentId: string;
+  number: number;
+  title: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A readable chapter from GET /content/:id/chapters/:chapterId. */
+export interface ChapterDetail {
+  id: string;
+  number: number;
+  title: string;
+  body: string;
+  contentId: string;
+  isFree: boolean;
+  content: { title: string; slug: string };
+  prevId: string | null;
+  nextId: string | null;
+}
+
 export interface Content {
   id: string;
   title: string;
@@ -102,6 +134,8 @@ export interface Content {
   rentalPrice: number | null;
   rentalDurationHours: number;
   subscriptionIncluded: boolean;
+  /** NOVEL only: the first N chapters are readable without a subscription. */
+  freeChapterCount: number;
   genres: Array<{ genre: Genre }>;
   createdAt: string;
   updatedAt: string;
@@ -122,6 +156,7 @@ export interface ContentAccess {
 
 export interface ContentDetail extends Content {
   seasons: Season[];
+  chapters: ChapterSummary[];
   videoAssets: Array<{ id: string; quality: VideoQuality }>;
   subtitles: Array<{ id: string; language: string; label: string | null }>;
   ratingAvg: number | null;
@@ -261,6 +296,11 @@ export interface HistoryItem {
     durationSec: number | null;
     seasonId: string;
     season: { number: number };
+  } | null;
+  chapter: {
+    id: string;
+    number: number;
+    title: string;
   } | null;
 }
 

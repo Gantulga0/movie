@@ -168,6 +168,44 @@ async function main() {
     }
   }
 
+  // ---- Sample novel (first 2 chapters free) --------------------------------
+  const novelSlug = 'suudriin-tuuh';
+  const novelExists = await prisma.content.findUnique({
+    where: { slug: novelSlug },
+  });
+  if (!novelExists) {
+    const novel = await prisma.content.create({
+      data: {
+        title: 'Сүүдрийн түүх',
+        slug: novelSlug,
+        description:
+          'Нэгэн жирийн оюутан үл үзэгдэх ертөнцийн хаалгыг санамсаргүй нээснээр амьдрал нь бүрмөсөн өөрчлөгдөнө. Бүлэг тутамд шинэчлэгдэх фантази бичвэр.',
+        type: ContentType.NOVEL,
+        status: ContentStatus.PUBLISHED,
+        releaseYear: 2026,
+        language: 'mn',
+        country: 'Mongolia',
+        freeChapterCount: 2,
+      },
+    });
+    const fantasy = await prisma.genre.findUnique({ where: { slug: 'fantasy' } });
+    if (fantasy) {
+      await prisma.contentGenre.create({
+        data: { contentId: novel.id, genreId: fantasy.id },
+      });
+    }
+    const paragraph = (n: number) =>
+      `Энэ бол ${n}-р бүлгийн туршилтын догол мөр юм. Бодит бичвэр админ панелаас орно.\n\nХоёр дахь догол мөр — догол мөрүүд хоосон мөрөөр ялгагдана.`;
+    await prisma.chapter.createMany({
+      data: Array.from({ length: 5 }, (_, i) => ({
+        contentId: novel.id,
+        number: i + 1,
+        title: `Бүлэг ${i + 1}`,
+        body: paragraph(i + 1),
+      })),
+    });
+  }
+
   // eslint-disable-next-line no-console
   console.log(
     `Seeded admin (${admin.email}, publicId=${admin.publicId}), ${PLANS.length} plans, ${GENRES.length} genres, ${samples.length} contents.`,

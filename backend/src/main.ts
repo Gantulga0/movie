@@ -1,14 +1,20 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   // rawBody keeps the unparsed request buffer around so the wire.mn webhook
   // can verify its HMAC signature against the exact bytes wire signed.
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
   const config = app.get(ConfigService);
+
+  // Novel chapter bodies exceed Express's 100kb JSON default.
+  app.useBodyParser('json', { limit: '2mb' });
 
   app.setGlobalPrefix('api');
   app.use(helmet());

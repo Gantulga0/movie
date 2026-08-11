@@ -16,6 +16,7 @@ import { UpdateContentDto } from './dto/update-content.dto';
 import { QueryContentDto } from './dto/query-content.dto';
 import { CreateEpisodeDto, CreateSeasonDto } from './dto/season-episode.dto';
 import { CreateSubtitleDto, CreateVideoAssetDto } from './dto/video-asset.dto';
+import { CreateChapterDto, UpdateChapterDto } from './dto/chapter.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -54,6 +55,15 @@ export class ContentController {
     return this.content.list(query, true);
   }
 
+  // Full chapter (with body) for the admin editor. Declared before
+  // 'admin/:idOrSlug' so the static segment wins.
+  @Get('admin/chapters/:chapterId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  getChapterAdmin(@Param('chapterId') chapterId: string) {
+    return this.content.getChapterAdmin(chapterId);
+  }
+
   @Get('admin/:idOrSlug')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -66,6 +76,19 @@ export class ContentController {
   @UseGuards(JwtAuthGuard, EntitlementGuard)
   watch(@Param('id') id: string, @Query('episodeId') episodeId?: string) {
     return this.content.watch(id, episodeId || undefined);
+  }
+
+  // Chapter body — free chapters need only a login; the rest need a live
+  // subscription. The check lives in the service (EntitlementGuard would
+  // block free chapters before knowing which chapter was asked for).
+  @Get(':id/chapters/:chapterId')
+  @UseGuards(JwtAuthGuard)
+  readChapter(
+    @Param('id') id: string,
+    @Param('chapterId') chapterId: string,
+    @CurrentUser() user: SafeUser,
+  ) {
+    return this.content.readChapter(id, chapterId, user);
   }
 
   /** The caller's access state for one title (watch/rent button logic). */
@@ -147,6 +170,32 @@ export class ContentController {
   @Roles(Role.ADMIN)
   removeEpisode(@Param('episodeId') episodeId: string) {
     return this.content.removeEpisode(episodeId);
+  }
+
+  // Chapters
+
+  @Post(':id/chapters')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  addChapter(@Param('id') id: string, @Body() dto: CreateChapterDto) {
+    return this.content.addChapter(id, dto);
+  }
+
+  @Patch('chapters/:chapterId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  updateChapter(
+    @Param('chapterId') chapterId: string,
+    @Body() dto: UpdateChapterDto,
+  ) {
+    return this.content.updateChapter(chapterId, dto);
+  }
+
+  @Delete('chapters/:chapterId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  removeChapter(@Param('chapterId') chapterId: string) {
+    return this.content.removeChapter(chapterId);
   }
 
   // Video assets / subtitles

@@ -21,7 +21,9 @@ import { PaymentModal } from "@/components/billing/PaymentModal";
 import { AccessOptions } from "@/components/billing/AccessOptions";
 import { TrailerEmbed } from "@/components/TrailerEmbed";
 import { useDetails } from "./DetailsModalProvider";
+import { ChapterList } from "./ChapterList";
 import {
+  IconBook,
   IconCheck,
   IconClock,
   IconInfo,
@@ -33,6 +35,7 @@ import {
   formatHours,
   formatRemaining,
   formatTimestamp,
+  typeLabel,
   watchedPercent,
 } from "@/lib/format";
 
@@ -173,10 +176,18 @@ export function DetailsModal({
   }, [history, content]);
 
   const isSeries = content?.type === "SERIES";
+  const isNovel = content?.type === "NOVEL";
   const firstEpisode = content?.seasons[0]?.episodes[0];
+
+  // Novel reading position: the latest chapter-bearing history row.
+  const novelResume = useMemo(() => {
+    if (!content || content.type !== "NOVEL") return null;
+    return history.find((h) => h.content.id === content.id && h.chapter) ?? null;
+  }, [history, content]);
 
   const watchHref = useMemo(() => {
     if (!content) return "#";
+    if (content.type === "NOVEL") return `/read/${content.id}`;
     if (resume?.episode) return `/watch/${content.id}?episodeId=${resume.episode.id}`;
     if (isSeries && firstEpisode)
       return `/watch/${content.id}?episodeId=${firstEpisode.id}`;
@@ -266,7 +277,7 @@ export function DetailsModal({
                     {content.releaseYear}
                   </span>
                 ) : null}
-                <Badge>{isSeries ? "Цуврал" : "Кино"}</Badge>
+                <Badge>{typeLabel(content.type)}</Badge>
                 {content.ageRating ? (
                   <span className="rounded border border-line-strong px-1.5 py-0.5 text-xs text-foreground/80">
                     {content.ageRating}
@@ -281,6 +292,9 @@ export function DetailsModal({
                   <span className="text-muted">
                     {content.seasons.length} улирал • {episodeCount} анги
                   </span>
+                ) : null}
+                {isNovel ? (
+                  <span className="text-muted">{content.chapters.length} бүлэг</span>
                 ) : null}
                 <Badge tone={content.releaseStatus === "RELEASING" ? "teal" : "default"}>
                   {content.releaseStatus === "RELEASING"
@@ -337,13 +351,26 @@ export function DetailsModal({
 
               {/* Actions */}
               <div className="mt-5 flex flex-wrap items-center gap-2.5">
-                {canWatch ? (
+                {isNovel ? (
+                  // Free chapters mean the reader is open to everyone signed in.
+                  canWatch || content.freeChapterCount > 0 ? (
+                    <ButtonLink href={watchHref} variant="primary" size="lg">
+                      <IconBook size={18} />
+                      {novelResume ? "Үргэлжлүүлэн унших" : "Унших"}
+                    </ButtonLink>
+                  ) : null
+                ) : canWatch ? (
                   <ButtonLink href={watchHref} variant="primary" size="lg">
                     <IconPlay size={18} />
                     {resume ? "Үргэлжлүүлэх" : "Үзэх"}
                   </ButtonLink>
                 ) : null}
-                {resume && canWatch ? (
+                {isNovel && novelResume?.chapter ? (
+                  <span className="text-xs text-muted">
+                    Бүлэг {novelResume.chapter.number} хүртэл уншсан
+                  </span>
+                ) : null}
+                {!isNovel && resume && canWatch ? (
                   <span className="text-xs text-muted">
                     {formatTimestamp(resume.progressSec)} хүртэл үзсэн
                   </span>
@@ -408,6 +435,15 @@ export function DetailsModal({
               {/* Episodes */}
               {isSeries && content.seasons.length > 0 ? (
                 <EpisodeList
+                  content={content}
+                  history={history}
+                  canWatch={Boolean(canWatch)}
+                />
+              ) : null}
+
+              {/* Chapters */}
+              {isNovel && content.chapters.length > 0 ? (
+                <ChapterList
                   content={content}
                   history={history}
                   canWatch={Boolean(canWatch)}

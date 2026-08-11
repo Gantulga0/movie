@@ -11,7 +11,14 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { IconCompass, IconX } from "@/components/ui/icons";
 import { contentApi, type ContentListParams } from "@/lib/api";
-import type { Content, ContentSort, Genre, ReleaseStatus } from "@/lib/types";
+import { typeLabel } from "@/lib/format";
+import type {
+  Content,
+  ContentSort,
+  ContentType,
+  Genre,
+  ReleaseStatus,
+} from "@/lib/types";
 
 const PAGE_SIZE = 24;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -74,7 +81,7 @@ function BrowseContent() {
   // URL params are the single source of truth for every filter.
   const query = useMemo((): ContentListParams => {
     const q: ContentListParams = { sort, limit: PAGE_SIZE };
-    if (type === "MOVIE" || type === "SERIES") q.type = type;
+    if (type === "MOVIE" || type === "SERIES" || type === "NOVEL") q.type = type;
     if (genre) q.genre = genre;
     if (country) q.country = country;
     if (status === "RELEASING" || status === "COMPLETED")
@@ -143,7 +150,11 @@ function BrowseContent() {
   );
 
   const activeFilters: Array<{ key: string; label: string }> = [];
-  if (type) activeFilters.push({ key: "type", label: type === "MOVIE" ? "Кино" : "Цуврал" });
+  if (type)
+    activeFilters.push({
+      key: "type",
+      label: typeLabel(type as ContentType),
+    });
   if (genre) {
     const g = genres.find((x) => x.slug === genre);
     activeFilters.push({ key: "genre", label: g?.name ?? genre });
@@ -167,7 +178,9 @@ function BrowseContent() {
             ? "Бүх кино"
             : type === "SERIES"
               ? "Бүх цуврал"
-              : "Бүх контент"
+              : type === "NOVEL"
+                ? "Бүх бичвэр"
+                : "Бүх контент"
         }
         title="Ангилал"
       />
@@ -190,6 +203,7 @@ function BrowseContent() {
               { value: null, label: "Бүгд" },
               { value: "MOVIE", label: "Кино" },
               { value: "SERIES", label: "Цуврал" },
+              { value: "NOVEL", label: "Бичвэр" },
             ].map((opt) => (
               <button
                 key={opt.label}

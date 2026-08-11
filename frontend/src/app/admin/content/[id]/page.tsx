@@ -17,6 +17,7 @@ import {
   SeasonsSection,
   VideoAssetsSection,
 } from "@/components/AdminMedia";
+import { ChaptersSection } from "@/components/AdminChapters";
 
 export default function EditContentPage() {
   const { id } = useParams<{ id: string }>();
@@ -70,6 +71,8 @@ export default function EditContentPage() {
           <MediaSection content={content} onChanged={load} />
           {content.type === "SERIES" ? (
             <SeasonsSection content={content} onChanged={load} />
+          ) : content.type === "NOVEL" ? (
+            <ChaptersSection content={content} onChanged={load} />
           ) : (
             <VideoAssetsSection
               contentId={content.id}

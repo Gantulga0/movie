@@ -58,13 +58,19 @@ function Player() {
 
   // A series opened without an episode (e.g. the featured "Watch" button) has no
   // content-level video → jump to the first episode instead of dead-ending.
+  // Novels have no video at all → hand off to the reader.
+  const isNovel = detail?.type === "NOVEL";
   const willRedirect =
-    !episodeId && detail?.type === "SERIES" && episodes.length > 0;
+    isNovel || (!episodeId && detail?.type === "SERIES" && episodes.length > 0);
   useEffect(() => {
+    if (isNovel) {
+      router.replace(`/read/${id}`);
+      return;
+    }
     if (willRedirect) {
       router.replace(`/watch/${id}?episodeId=${episodes[0].id}`);
     }
-  }, [willRedirect, id, episodes, router]);
+  }, [isNovel, willRedirect, id, episodes, router]);
 
   const selectEpisode = useCallback(
     (epId: string) => router.push(`/watch/${id}?episodeId=${epId}`),

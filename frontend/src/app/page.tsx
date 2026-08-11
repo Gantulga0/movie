@@ -26,7 +26,12 @@ const BASE_GRADIENT =
 /** Featured content (curated in the admin panel) becomes a hero slide. */
 function toSlide(content: Content): Slide {
   return {
-    tag: content.type === "SERIES" ? "ЦУВРАЛ" : "ОНЦЛОХ",
+    tag:
+      content.type === "SERIES"
+        ? "ЦУВРАЛ"
+        : content.type === "NOVEL"
+          ? "БИЧВЭР"
+          : "ОНЦЛОХ",
     title: content.title,
     year: content.releaseYear ? String(content.releaseYear) : "",
     genres: content.genres.slice(0, 3).map((g) => g.genre.name),

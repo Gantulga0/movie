@@ -2,7 +2,7 @@
 
 import type { Content, ContentCardData } from "@/lib/types";
 import { contentApi } from "@/lib/api";
-import { formatDuration, formatMnt } from "@/lib/format";
+import { formatDuration, formatMnt, typeLabel } from "@/lib/format";
 import { useDetails } from "@/components/details/DetailsModalProvider";
 import { useSubscription } from "@/lib/subscription-context";
 
@@ -41,7 +41,9 @@ export function ContentCard({ content, progressPercent }: ContentCardProps) {
 
   const metaLine = [
     content.releaseYear,
-    content.type === "SERIES" ? "Цуврал" : formatDuration(content.durationSec),
+    content.type === "MOVIE"
+      ? formatDuration(content.durationSec)
+      : typeLabel(content.type),
   ]
     .filter(Boolean)
     .join(" • ");
@@ -112,9 +114,9 @@ export function ContentCard({ content, progressPercent }: ContentCardProps) {
         </div>
 
         {/* Top-left: format marker */}
-        {content.type === "SERIES" ? (
+        {content.type !== "MOVIE" ? (
           <span className="absolute left-2 top-2 rounded-md bg-background-deep/75 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-foreground/90 backdrop-blur-sm">
-            Цуврал
+            {typeLabel(content.type)}
           </span>
         ) : null}
 

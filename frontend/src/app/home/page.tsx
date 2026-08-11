@@ -8,11 +8,17 @@ import { ContinueWatchingCard } from "@/components/ContinueWatchingCard";
 import { useDetails } from "@/components/details/DetailsModalProvider";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { IconCheck, IconInfo, IconPlay, IconPlus } from "@/components/ui/icons";
+import {
+  IconBook,
+  IconCheck,
+  IconInfo,
+  IconPlay,
+  IconPlus,
+} from "@/components/ui/icons";
 import { useAuth } from "@/lib/auth-context";
 import { activityApi, contentApi } from "@/lib/api";
 import type { Content, Genre, HistoryItem } from "@/lib/types";
-import { formatDuration, watchedPercent } from "@/lib/format";
+import { formatDuration, typeLabel, watchedPercent } from "@/lib/format";
 
 const HERO_INTERVAL_MS = 8000;
 /** How many genre rails the home page renders. */
@@ -96,8 +102,9 @@ function HomeContent() {
     const seen = new Set<string>();
     const rows: HistoryItem[] = [];
     for (const row of history) {
-      if (row.progressSec < 30 && !row.completed) continue;
-      const key = `${row.content.id}:${row.episode?.id ?? ""}`;
+      // Novel rows carry no seconds — the chapter itself is the position.
+      if (row.progressSec < 30 && !row.completed && !row.chapter) continue;
+      const key = `${row.content.id}:${row.episode?.id ?? row.chapter?.id ?? ""}`;
       if (seen.has(key)) continue;
       seen.add(key);
       rows.push(row);
@@ -237,9 +244,11 @@ function HomeHero({
 
   const heroEp = hero ? firstEpisode[hero.id] : undefined;
   const watchHref = hero
-    ? hero.type === "SERIES" && heroEp
-      ? `/watch/${hero.id}?episodeId=${heroEp}`
-      : `/watch/${hero.id}`
+    ? hero.type === "NOVEL"
+      ? `/read/${hero.id}`
+      : hero.type === "SERIES" && heroEp
+        ? `/watch/${hero.id}?episodeId=${heroEp}`
+        : `/watch/${hero.id}`
     : "#";
 
   async function toggleList(content: Content) {
@@ -331,7 +340,7 @@ function HomeHero({
         className="animate-rise w-full max-w-2xl px-5 pb-14 sm:px-10"
       >
         <p className="text-xs font-bold uppercase tracking-[0.3em] text-accent">
-          {hero.type === "SERIES" ? "Онцлох цуврал" : "Онцлох кино"}
+          Онцлох {typeLabel(hero.type).toLowerCase()}
         </p>
         <button
           type="button"
@@ -380,8 +389,8 @@ function HomeHero({
 
         <div className="mt-6 flex flex-wrap items-center gap-2.5">
           <ButtonLink href={watchHref} variant="primary" size="lg">
-            <IconPlay size={18} />
-            Үзэх
+            {hero.type === "NOVEL" ? <IconBook size={18} /> : <IconPlay size={18} />}
+            {hero.type === "NOVEL" ? "Унших" : "Үзэх"}
           </ButtonLink>
           {hero.trailerUrl ? (
             <Button

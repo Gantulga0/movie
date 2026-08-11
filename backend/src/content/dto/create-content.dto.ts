@@ -116,6 +116,13 @@ export class CreateContentDto {
   @IsBoolean()
   featured?: boolean;
 
+  /** NOVEL only: the first N chapters are readable without a subscription. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10_000)
+  freeChapterCount?: number;
+
   /** Genre names; unknown ones are created on the fly. */
   @IsOptional()
   @IsArray()

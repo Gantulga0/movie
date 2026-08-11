@@ -1,3 +1,17 @@
+import type { ContentType } from "./types";
+
+/** Content-type badge label: MOVIE → "Кино", SERIES → "Цуврал", NOVEL → "Бичвэр". */
+export function typeLabel(type: ContentType): string {
+  switch (type) {
+    case "SERIES":
+      return "Цуврал";
+    case "NOVEL":
+      return "Бичвэр";
+    default:
+      return "Кино";
+  }
+}
+
 /** 8000 -> "8,000₮" */
 export function formatMnt(amount: number): string {
   return `${amount.toLocaleString("en-US")}₮`;

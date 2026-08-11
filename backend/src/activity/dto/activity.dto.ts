@@ -16,6 +16,10 @@ export class UpsertHistoryDto {
   @IsString()
   episodeId?: string;
 
+  @IsOptional()
+  @IsString()
+  chapterId?: string;
+
   @IsInt()
   @Min(0)
   progressSec!: number;

@@ -294,6 +294,14 @@ export const IconClapperboard = (p: IconProps) => (
   </Base>
 );
 
+/** Open book — the novels section. */
+export const IconBook = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M12 6.5C10.5 4.9 8.4 4 6 4c-1 0-2 .15-3 .5V19c1-.35 2-.5 3-.5 2.4 0 4.5.9 6 2.5 1.5-1.6 3.6-2.5 6-2.5 1 0 2 .15 3 .5V4.5c-1-.35-2-.5-3-.5-2.4 0-4.5.9-6 2.5Z" />
+    <path d="M12 6.5V21" />
+  </Base>
+);
+
 /** Screen with a play mark — the series section. */
 export const IconSeriesPlay = (p: IconProps) => (
   <Base {...p}>
