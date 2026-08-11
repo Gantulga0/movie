@@ -22,11 +22,25 @@ function Reader() {
   const { user, token, loading: authLoading } = useAuth();
 
   const [detail, setDetail] = useState<ContentDetail | null>(null);
+  const [detailFailed, setDetailFailed] = useState(false);
   const [access, setAccess] = useState<ContentAccess | null>(null);
-  const [chapter, setChapter] = useState<ChapterDetail | null>(null);
-  const [error, setError] = useState<"subscription" | "generic" | null>(null);
+  // Fetch result keyed by chapterId — switching chapters derives back to the
+  // loading state without any synchronous setState resets in the effect.
+  const [fetched, setFetched] = useState<{
+    chapterId: string;
+    chapter: ChapterDetail | null;
+    error: "subscription" | "generic" | null;
+  } | null>(null);
   const completedSent = useRef<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+
+  const chapter =
+    fetched && fetched.chapterId === chapterId ? fetched.chapter : null;
+  const error = detailFailed
+    ? "generic"
+    : fetched && fetched.chapterId === chapterId
+      ? fetched.error
+      : null;
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
@@ -38,7 +52,7 @@ function Reader() {
     contentApi
       .get(id)
       .then(setDetail)
-      .catch(() => setError("generic"));
+      .catch(() => setDetailFailed(true));
   }, [id]);
 
   useEffect(() => {
@@ -85,18 +99,26 @@ function Reader() {
   // The chapter body (entitlement enforced server-side).
   useEffect(() => {
     if (!id || !chapterId || !token) return;
-    setChapter(null);
-    setError(null);
+    let cancelled = false;
     contentApi
       .chapter(id, chapterId, token)
-      .then(setChapter)
+      .then((ch) => {
+        if (!cancelled) setFetched({ chapterId, chapter: ch, error: null });
+      })
       .catch((err) => {
-        if (err instanceof ApiError && err.code === "SUBSCRIPTION_REQUIRED") {
-          setError("subscription");
-        } else {
-          setError("generic");
-        }
+        if (cancelled) return;
+        setFetched({
+          chapterId,
+          chapter: null,
+          error:
+            err instanceof ApiError && err.code === "SUBSCRIPTION_REQUIRED"
+              ? "subscription"
+              : "generic",
+        });
       });
+    return () => {
+      cancelled = true;
+    };
   }, [id, chapterId, token]);
 
   // Opening a chapter marks it as the reading position.
