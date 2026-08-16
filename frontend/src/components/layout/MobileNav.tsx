@@ -16,7 +16,6 @@ const ITEMS = [
   { href: "/search", label: "Хайх", icon: IconSearch },
   { href: "/browse", label: "Ангилал", icon: IconCompass },
   { href: "/my-list", label: "Жагсаалт", icon: IconBookmark },
-  { href: "/settings", label: "Тохиргоо", icon: IconSettings },
 ];
 
 /**
