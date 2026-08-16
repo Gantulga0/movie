@@ -132,7 +132,7 @@ function PlansContent() {
           className="mx-auto h-14 w-auto drop-shadow-[0_0_28px_rgba(124,140,255,0.6)]"
         />
         <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.35em] text-accent">
-          Infinite Pass
+          Шивнээ Pass
         </p>
         <h1 className="display mt-2 text-4xl font-bold text-foreground sm:text-5xl">
           Эрх сунгах

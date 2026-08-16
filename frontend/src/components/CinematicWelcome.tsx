@@ -78,7 +78,7 @@ export function CinematicWelcome({ onCovered, onDone }: CinematicWelcomeProps) {
             className="relative h-14 w-auto sm:h-16"
           />
           <span className="display relative text-5xl font-bold tracking-tight text-white sm:text-6xl">
-            INFINITE
+            Шивнээ
           </span>
           {/* Light sweeping across the mark. */}
           <span className="welcome-shine" />

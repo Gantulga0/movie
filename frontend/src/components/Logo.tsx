@@ -9,7 +9,7 @@ export function Logo({ className = "" }: { className?: string }) {
     <Link
       href="/"
       className={`group flex select-none items-center gap-2.5 ${className}`}
-      aria-label="Infinite нүүр хуудас"
+      aria-label="Шивнээ нүүр хуудас"
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -18,7 +18,7 @@ export function Logo({ className = "" }: { className?: string }) {
         className="h-9 w-auto drop-shadow-[0_0_14px_rgba(124,140,255,0.55)] transition duration-300 group-hover:drop-shadow-[0_0_22px_rgba(124,140,255,0.8)]"
       />
       <span className="display text-3xl font-bold tracking-tight text-white">
-        INFINITE
+        Шивнээ
       </span>
     </Link>
   );

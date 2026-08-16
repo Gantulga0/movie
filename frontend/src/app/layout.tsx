@@ -21,9 +21,9 @@ const display = Sofia_Sans_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: "Infinite Movie",
+  title: "Шивнээ",
   description:
-    "Infinite дээр дуртай кино, цувралаа хаанаас ч, хэзээ ч тасралтгүй үзээрэй.",
+    "Шивнээ Өгүүллэг",
 };
 
 // viewport-fit=cover makes env(safe-area-inset-*) real on iOS, so the

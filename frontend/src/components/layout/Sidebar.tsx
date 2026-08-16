@@ -149,7 +149,7 @@ export function Sidebar({ expanded, onToggle, onProfile }: SidebarProps) {
         <Link
           href="/home"
           className="group flex select-none items-center gap-2.5"
-          aria-label="Infinite нүүр хуудас"
+          aria-label="Шивнээ нүүр хуудас"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -159,7 +159,7 @@ export function Sidebar({ expanded, onToggle, onProfile }: SidebarProps) {
           />
           {expanded ? (
             <span className="sidebar-label display text-2xl font-bold tracking-tight text-foreground">
-              INFINITE
+              Шивнээ
             </span>
           ) : null}
         </Link>

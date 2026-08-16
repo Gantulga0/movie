@@ -82,7 +82,10 @@ export default function LandingPage() {
     <main className="relative isolate min-h-screen w-full overflow-hidden bg-background">
       {/* Background carousel */}
       <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0" style={{ background: BASE_GRADIENT }} />
+        <div
+          className="absolute inset-0"
+          style={{ background: BASE_GRADIENT }}
+        />
         {slides?.map((s, i) => (
           <div
             key={s.title}
@@ -220,7 +223,7 @@ export default function LandingPage() {
           /* Nothing featured yet — generic pitch */
           <div className="max-w-2xl animate-rise">
             <h1 className="display text-4xl font-bold leading-tight tracking-tight text-white drop-shadow-xl sm:text-6xl lg:text-7xl">
-              Хязгааргүй кино, цуврал, анимэ
+              Хязгааргүй кино, цуврал, аниме, бичвэр
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-white/80 sm:text-lg">
               Дуртай контентоо хаанаас ч, хэзээ ч тасралтгүй үзээрэй. Сарын

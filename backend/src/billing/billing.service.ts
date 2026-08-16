@@ -39,17 +39,14 @@ export class BillingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly wire: WireService,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService
   ) {}
 
   /** Public web origin, for building wire.mn hosted-checkout return URLs. */
   private webUrl(): string {
     const explicit = this.config.get<string>('APP_WEB_URL');
     const base =
-      explicit ??
-      this.config
-        .get<string>('CORS_ORIGIN', 'http://localhost:3000')
-        .split(',')[0];
+      explicit ?? this.config.get<string>('CORS_ORIGIN', 'http://localhost:3000').split(',')[0];
     return base.replace(/\/$/, '');
   }
 
@@ -129,9 +126,7 @@ export class BillingService {
       where: { userId: user.id, contentId, endsAt: { gt: new Date() } },
     });
     if (existing) {
-      throw new BadRequestException(
-        'Танд энэ контентын идэвхтэй түрээс байна',
-      );
+      throw new BadRequestException('Танд энэ контентын идэвхтэй түрээс байна');
     }
 
     const payment = await this.prisma.payment.create({
@@ -146,7 +141,7 @@ export class BillingService {
     const invoice = await this.wire.createCheckout({
       paymentId: payment.id,
       amount: content.rentalPrice,
-      description: `${this.config.get('APP_NAME', 'Infinite')} — Түрээс: ${content.title}`,
+      description: `${this.config.get('APP_NAME', 'Шивнээ')} — Түрээс: ${content.title}`,
       // wire.mn returns here after the hosted page; the title screen re-checks
       // access on load, and ?wpay lets it finalize immediately.
       successUrl: `${this.webUrl()}/title/${content.slug}?wpay=${payment.id}`,
@@ -193,7 +188,7 @@ export class BillingService {
     const invoice = await this.wire.createCheckout({
       paymentId: payment.id,
       amount: plan.price,
-      description: `${this.config.get('APP_NAME', 'Infinite')} — ${plan.name}`,
+      description: `${this.config.get('APP_NAME', 'Шивнээ')} — ${plan.name}`,
       // wire.mn returns to the plans page; ?wpay finalizes the moment we land.
       successUrl: `${this.webUrl()}/plans?wpay=${payment.id}`,
     });
@@ -247,11 +242,7 @@ export class BillingService {
    * payment once wire confirms the intent succeeded. Signature failures throw
    * so wire retries; unknown/duplicate events are acknowledged quietly.
    */
-  async handleWireWebhook(
-    rawBody: Buffer,
-    signature: string | undefined,
-    clientIp?: string,
-  ) {
+  async handleWireWebhook(rawBody: Buffer, signature: string | undefined, clientIp?: string) {
     // Defence in depth: only wire.mn's IP, then a valid signature.
     this.wire.assertAllowedIp(clientIp);
     const event = this.wire.verifyWebhook(rawBody, signature);
@@ -342,7 +333,7 @@ export class BillingService {
           tx,
           payment.userId,
           payment.plan.id,
-          payment.plan.durationDay,
+          payment.plan.durationDay
         );
         await tx.payment.update({
           where: { id: paymentId },
@@ -356,7 +347,7 @@ export class BillingService {
           tx,
           payment.userId,
           payment.content,
-          paymentId,
+          paymentId
         );
         return { subscription: null, rental };
       }
@@ -373,7 +364,7 @@ export class BillingService {
     tx: Prisma.TransactionClient,
     userId: string,
     content: Content,
-    paymentId: string,
+    paymentId: string
   ) {
     const now = new Date();
     const durationMs = content.rentalDurationHours * 60 * 60 * 1000;
@@ -402,13 +393,9 @@ export class BillingService {
     });
   }
 
-  private createOrExtendSubscription(
-    userId: string,
-    planId: string,
-    durationDay: number,
-  ) {
+  private createOrExtendSubscription(userId: string, planId: string, durationDay: number) {
     return this.prisma.$transaction((tx) =>
-      this.createOrExtendSubscriptionTx(tx, userId, planId, durationDay),
+      this.createOrExtendSubscriptionTx(tx, userId, planId, durationDay)
     );
   }
 
@@ -417,7 +404,7 @@ export class BillingService {
     tx: Parameters<Parameters<PrismaService['$transaction']>[0]>[0],
     userId: string,
     planId: string,
-    durationDay: number,
+    durationDay: number
   ) {
     const now = new Date();
     const current = await tx.subscription.findFirst({
@@ -426,9 +413,7 @@ export class BillingService {
     });
 
     const startsFrom = current && current.endsAt > now ? current.endsAt : now;
-    const endsAt = new Date(
-      startsFrom.getTime() + durationDay * 24 * 60 * 60 * 1000,
-    );
+    const endsAt = new Date(startsFrom.getTime() + durationDay * 24 * 60 * 60 * 1000);
 
     return tx.subscription.create({
       data: { userId, planId, startedAt: now, endsAt },

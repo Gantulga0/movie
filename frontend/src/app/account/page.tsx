@@ -42,7 +42,10 @@ function AccountContent() {
 
   useEffect(() => {
     if (!token) return;
-    billingApi.me(token).then(setMine).catch(() => undefined);
+    billingApi
+      .me(token)
+      .then(setMine)
+      .catch(() => undefined);
   }, [token]);
 
   if (!user) return null;
@@ -143,7 +146,7 @@ function AccountContent() {
 
             <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted">
-                Infinite гишүүнчлэл
+                Шивнээ гишүүнчлэл
               </p>
               <p className="mt-1 truncate text-lg font-bold text-foreground">
                 {user.name ?? user.phone}

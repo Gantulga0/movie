@@ -632,7 +632,7 @@ export function VideoPlayer({
             lineHeight: 1,
           }}
         >
-          INFINITE
+          Шивнээ
         </span>
       </div>
 
