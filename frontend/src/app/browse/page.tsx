@@ -74,14 +74,27 @@ function BrowseContent() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
-    contentApi.genres().then(setGenres).catch(() => setGenres([]));
-    contentApi.countries().then(setCountries).catch(() => setCountries([]));
-  }, []);
+    const contentType =
+      type === "MOVIE" || type === "SERIES" || type === "NOVEL"
+        ? type
+        : undefined;
+
+    contentApi
+      .genres(contentType)
+      .then(setGenres)
+      .catch(() => setGenres([]));
+
+    contentApi
+      .countries()
+      .then(setCountries)
+      .catch(() => setCountries([]));
+  }, [type]);
 
   // URL params are the single source of truth for every filter.
   const query = useMemo((): ContentListParams => {
     const q: ContentListParams = { sort, limit: PAGE_SIZE };
-    if (type === "MOVIE" || type === "SERIES" || type === "NOVEL") q.type = type;
+    if (type === "MOVIE" || type === "SERIES" || type === "NOVEL")
+      q.type = type;
     if (genre) q.genre = genre;
     if (country) q.country = country;
     if (status === "RELEASING" || status === "COMPLETED")
@@ -276,7 +289,10 @@ function BrowseContent() {
             label="Эрэмбэ"
             value={sort}
             onChange={(v) => setParam("sort", v === "new" ? null : v)}
-            options={SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            options={SORT_OPTIONS.map((o) => ({
+              value: o.value,
+              label: o.label,
+            }))}
             className="w-full sm:col-span-2 lg:col-span-1 lg:ml-auto lg:w-48"
           />
         </div>
@@ -356,4 +372,3 @@ function BrowseContent() {
     </div>
   );
 }
-
