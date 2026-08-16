@@ -155,7 +155,7 @@ export function ChaptersSection({
           <p className="text-xs font-bold uppercase tracking-wider text-white/60">
             {form.chapterId ? "Бүлэг засах" : "Шинэ бүлэг"}
           </p>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex gap-2 flex-wrap">
             <input
               type="number"
               min={1}
@@ -173,7 +173,7 @@ export function ChaptersSection({
               }
               placeholder="Бүлгийн гарчиг…"
               aria-label="Бүлгийн гарчиг"
-              className={`${input} min-w-0 flex-1`}
+              className={`${input} min-w-[260px] flex-1 text-base`}
             />
           </div>
           <textarea
