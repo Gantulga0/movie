@@ -84,9 +84,7 @@ export class WireService {
   }
 
   private get baseUrl(): string {
-    return this.config
-      .get<string>('WIRE_BASE_URL', 'https://api.wire.mn/v1')
-      .replace(/\/$/, '');
+    return this.config.get<string>('WIRE_BASE_URL', 'https://api.wire.mn/v1').replace(/\/$/, '');
   }
 
   private get apiKey(): string {
@@ -145,10 +143,11 @@ export class WireService {
       {
         amount: params.amount,
         currency: 'MNT',
+        description: params.description,
         automatic_operator: true,
         metadata: { paymentId: params.paymentId },
       },
-      `pi-${params.paymentId}`,
+      `pi-${params.paymentId}`
     );
 
     // 2. Confirm → wire dispatches to an operator and returns next_action,
@@ -157,27 +156,24 @@ export class WireService {
       'POST',
       `/payment_intents/${intent.id}/confirm`,
       { return_url: params.successUrl },
-      `confirm-${params.paymentId}`,
+      `confirm-${params.paymentId}`
     );
 
     // wire returns a QPay-style QR payload: a QR image, its raw text, and a
     // list of bank-app deeplinks. The client renders these in-app (no redirect).
-    const action = (confirmed.next_action ??
-      intent.next_action) as WireNextAction | null;
+    const action = (confirmed.next_action ?? intent.next_action) as WireNextAction | null;
     const qr = action?.qr;
     if (!qr) {
       this.logger.warn(
         `wire confirm: no qr in next_action. status=${confirmed.status} ` +
-          `full=${JSON.stringify(confirmed)}`,
+          `full=${JSON.stringify(confirmed)}`
       );
     }
 
     // image_url is a full data URI ("data:image/png;base64,…"); the client
     // re-adds that prefix, so store the bare base64 payload only.
     const img = qr?.image_url ?? '';
-    const qrImage = img.startsWith('data:')
-      ? img.slice(img.indexOf(',') + 1)
-      : img || null;
+    const qrImage = img.startsWith('data:') ? img.slice(img.indexOf(',') + 1) : img || null;
 
     return {
       invoiceId: intent.id,
@@ -202,10 +198,7 @@ export class WireService {
       return { paid: false, paidAmount: 0, transactionId: null };
     }
 
-    const intent = await this.request<WirePaymentIntent>(
-      'GET',
-      `/payment_intents/${intentId}`,
-    );
+    const intent = await this.request<WirePaymentIntent>('GET', `/payment_intents/${intentId}`);
 
     const paid = intent.status === 'succeeded';
     return {
@@ -234,7 +227,7 @@ export class WireService {
       signatureHeader.split(',').map((kv) => {
         const [k, v] = kv.split('=');
         return [k.trim(), (v ?? '').trim()] as const;
-      }),
+      })
     );
     const t = parts.get('t');
     const v1 = parts.get('v1');
@@ -261,7 +254,7 @@ export class WireService {
     method: 'GET' | 'POST',
     path: string,
     body?: Record<string, unknown>,
-    idempotencyKey?: string,
+    idempotencyKey?: string
   ): Promise<T> {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
@@ -282,13 +275,10 @@ export class WireService {
       // reached the server, so there's no HTTP status to read. undici puts
       // the real reason (ENOTFOUND, ECONNREFUSED, …) on `.cause`.
       const err = e as Error & { cause?: unknown };
-      const cause =
-        err.cause instanceof Error ? err.cause.message : String(err.cause ?? '');
-      this.logger.error(
-        `wire ${method} ${url} network error: ${err.message} ${cause}`,
-      );
+      const cause = err.cause instanceof Error ? err.cause.message : String(err.cause ?? '');
+      this.logger.error(`wire ${method} ${url} network error: ${err.message} ${cause}`);
       throw new InternalServerErrorException(
-        `wire.mn-руу холбогдсонгүй (${this.baseUrl || 'BASE URL хоосон'})`,
+        `wire.mn-руу холбогдсонгүй (${this.baseUrl || 'BASE URL хоосон'})`
       );
     }
     if (!res.ok) {
@@ -302,9 +292,7 @@ export class WireService {
           error?: { code?: string; message?: string };
         };
         if (parsed.error) {
-          detail = [parsed.error.code, parsed.error.message]
-            .filter(Boolean)
-            .join(': ');
+          detail = [parsed.error.code, parsed.error.message].filter(Boolean).join(': ');
         }
       } catch {
         if (text) detail = text.slice(0, 200);
