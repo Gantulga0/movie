@@ -4,13 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  ContentStatus,
-  ContentType,
-  Prisma,
-  Role,
-  SubscriptionStatus,
-} from '@prisma/client';
+import { ContentStatus, ContentType, Prisma, Role, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { SafeUser } from '../users/users.service';
@@ -31,10 +25,7 @@ const listInclude = {
 } satisfies Prisma.ContentInclude;
 
 /** List orderings. 'watched'/'rated' rank by activity volume (row counts). */
-const SORT_ORDERINGS: Record<
-  ContentSort,
-  Prisma.ContentOrderByWithRelationInput[]
-> = {
+const SORT_ORDERINGS: Record<ContentSort, Prisma.ContentOrderByWithRelationInput[]> = {
   new: [{ createdAt: 'desc' }],
   year: [{ releaseYear: 'desc' }, { createdAt: 'desc' }],
   title: [{ title: 'asc' }],
@@ -46,7 +37,7 @@ const SORT_ORDERINGS: Record<
 export class ContentService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly storage: StorageService,
+    private readonly storage: StorageService
   ) {}
 
   // ---------------------------------------------------------------- public
@@ -120,9 +111,7 @@ export class ContentService {
       where: {
         id: { not: content.id },
         status: ContentStatus.PUBLISHED,
-        ...(genreIds.length
-          ? { genres: { some: { genreId: { in: genreIds } } } }
-          : {}),
+        ...(genreIds.length ? { genres: { some: { genreId: { in: genreIds } } } } : {}),
       },
       include: listInclude,
       relationLoadStrategy: 'join',
@@ -166,9 +155,7 @@ export class ContentService {
     ]);
     if (!content) throw new NotFoundException('Контент олдсонгүй');
 
-    const viaSubscription = Boolean(
-      content.subscriptionIncluded && subscription,
-    );
+    const viaSubscription = Boolean(content.subscriptionIncluded && subscription);
     const viaRental = Boolean(rental);
 
     return {
@@ -281,7 +268,7 @@ export class ContentService {
         mimeType: a.mimeType,
         sizeBytes: a.sizeBytes === null ? null : Number(a.sizeBytes),
         url: await this.resolvePlaybackUrl(a.r2Key, a.url),
-      })),
+      }))
     );
     const signedSubtitles = await Promise.all(
       subtitles.map(async (s) => ({
@@ -289,7 +276,7 @@ export class ContentService {
         language: s.language,
         label: s.label,
         url: await this.resolvePlaybackUrl(s.r2Key, s.url),
-      })),
+      }))
     );
 
     return {
@@ -379,7 +366,7 @@ export class ContentService {
   /** Signed R2 GET URL when possible, otherwise the stored URL. */
   private async resolvePlaybackUrl(
     r2Key: string | null,
-    url: string | null,
+    url: string | null
   ): Promise<string | null> {
     if (r2Key && this.storage.r2Configured) {
       try {
@@ -391,8 +378,11 @@ export class ContentService {
     return url;
   }
 
-  listGenres() {
-    return this.prisma.genre.findMany({ orderBy: { name: 'asc' } });
+  listGenres(type?: ContentType) {
+    return this.prisma.genre.findMany({
+      where: type ? { types: { has: type } } : undefined,
+      orderBy: { name: 'asc' },
+    });
   }
 
   /** Distinct countries across published titles — powers the country filter. */
@@ -403,9 +393,7 @@ export class ContentService {
       distinct: ['country'],
       orderBy: { country: 'asc' },
     });
-    return rows
-      .map((r) => r.country)
-      .filter((c): c is string => Boolean(c && c.trim()));
+    return rows.map((r) => r.country).filter((c): c is string => Boolean(c && c.trim()));
   }
 
   // ----------------------------------------------------------------- admin
@@ -429,10 +417,7 @@ export class ContentService {
       });
     } catch (err) {
       // Slug already taken — retry once with a random suffix.
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2002'
-      ) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         return this.prisma.content.create({
           data: {
             ...data,
@@ -467,9 +452,7 @@ export class ContentService {
       where: { id },
       data: {
         ...data,
-        ...(genres !== undefined
-          ? { genres: this.genreConnections(genres) }
-          : {}),
+        ...(genres !== undefined ? { genres: this.genreConnections(genres) } : {}),
       },
       include: listInclude,
     });
@@ -502,11 +485,9 @@ export class ContentService {
   }
 
   async updateEpisode(episodeId: string, dto: Partial<CreateEpisodeDto>) {
-    return this.prisma.episode
-      .update({ where: { id: episodeId }, data: dto })
-      .catch(() => {
-        throw new NotFoundException('Анги олдсонгүй');
-      });
+    return this.prisma.episode.update({ where: { id: episodeId }, data: dto }).catch(() => {
+      throw new NotFoundException('Анги олдсонгүй');
+    });
   }
 
   async removeEpisode(episodeId: string) {
@@ -526,10 +507,7 @@ export class ContentService {
     try {
       return await this.prisma.chapter.create({ data: { contentId, ...dto } });
     } catch (err) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2002'
-      ) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new BadRequestException('Бүлгийн дугаар давхардаж байна');
       }
       throw err;
@@ -581,8 +559,7 @@ export class ContentService {
     const { episodeId, url, ...rest } = dto;
     // Defense-in-depth: for R2 assets never persist a permanent public URL —
     // playback only ever resolves through a short-lived signed URL from r2Key.
-    const storedUrl =
-      rest.r2Key && this.storage.r2Configured ? null : (url ?? null);
+    const storedUrl = rest.r2Key && this.storage.r2Configured ? null : (url ?? null);
     const asset = await this.prisma.videoAsset.create({
       data: episodeId
         ? { episodeId, url: storedUrl, ...rest }
@@ -604,8 +581,7 @@ export class ContentService {
       throw new BadRequestException('url эсвэл r2Key шаардлагатай');
     }
     const { episodeId, url, ...rest } = dto;
-    const storedUrl =
-      rest.r2Key && this.storage.r2Configured ? null : (url ?? null);
+    const storedUrl = rest.r2Key && this.storage.r2Configured ? null : (url ?? null);
     return this.prisma.subtitle.create({
       data: episodeId
         ? { episodeId, url: storedUrl, ...rest }

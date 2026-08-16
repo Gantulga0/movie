@@ -53,25 +53,30 @@ interface RequestOptions {
   token?: string | null;
   /** Cache a successful token-less GET this long; also dedupes in-flight calls. */
   cacheTtlMs?: number;
+  query?: Record<string, string | number | boolean | undefined>;
 }
 
 /** Short-lived cache for public GETs — repeat navigations render instantly. */
 const getCache = new Map<string, { at: number; promise: Promise<unknown> }>();
 
-async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", token, cacheTtlMs } = options;
+async function apiFetch<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  const { method = "GET", token, cacheTtlMs, query } = options;
+  const finalPath = `${path}${query ? qs(query) : ""}`;
   const cacheable = Boolean(cacheTtlMs) && method === "GET" && !token;
   if (cacheable) {
-    const hit = getCache.get(path);
+    const hit = getCache.get(finalPath);
     if (hit && Date.now() - hit.at < (cacheTtlMs as number)) {
       return hit.promise as Promise<T>;
     }
   }
-  const promise = doFetch<T>(path, options);
+  const promise = doFetch<T>(finalPath, options);
   if (cacheable) {
-    getCache.set(path, { at: Date.now(), promise });
+    getCache.set(finalPath, { at: Date.now(), promise });
     // Failures must not be served from the cache.
-    promise.catch(() => getCache.delete(path));
+    promise.catch(() => getCache.delete(finalPath));
   }
   return promise;
 }
@@ -91,7 +96,10 @@ async function doFetch<T>(path: string, options: RequestOptions): Promise<T> {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new ApiError("Сервертэй холбогдож чадсангүй. Дараа дахин оролдоно уу.", 0);
+    throw new ApiError(
+      "Сервертэй холбогдож чадсангүй. Дараа дахин оролдоно уу.",
+      0,
+    );
   }
 
   const data = await res.json().catch(() => null);
@@ -99,8 +107,10 @@ async function doFetch<T>(path: string, options: RequestOptions): Promise<T> {
   if (!res.ok) {
     const message = normalizeError(data) ?? "Алдаа гарлаа. Дахин оролдоно уу.";
     const code =
-      data && typeof data === "object" && typeof (data as { error?: unknown }).error === "string"
-        ? ((data as { error: string }).error)
+      data &&
+      typeof data === "object" &&
+      typeof (data as { error?: unknown }).error === "string"
+        ? (data as { error: string }).error
         : undefined;
     throw new ApiError(message, res.status, code, data);
   }
@@ -117,7 +127,9 @@ function normalizeError(data: unknown): string | null {
   return null;
 }
 
-function qs(params: Record<string, string | number | boolean | undefined>): string {
+function qs(
+  params: Record<string, string | number | boolean | undefined>,
+): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== "") search.set(key, String(value));
@@ -135,11 +147,16 @@ export const authApi = {
     email?: string;
     password: string;
   }) =>
-    apiFetch<PendingVerification>("/auth/register", { method: "POST", body: payload }),
+    apiFetch<PendingVerification>("/auth/register", {
+      method: "POST",
+      body: payload,
+    }),
 
   /** Poll while the user texts the code to 144773; carries tokens once verified. */
   verifyStatus: (sessionId: string) =>
-    apiFetch<VerifyStatus>(`/auth/verify/status/${encodeURIComponent(sessionId)}`),
+    apiFetch<VerifyStatus>(
+      `/auth/verify/status/${encodeURIComponent(sessionId)}`,
+    ),
 
   /** MO-SMS "resend": open a fresh session (e.g. after the code expired). */
   verifyRestart: (sessionId: string) =>
@@ -164,7 +181,10 @@ export const authApi = {
     ),
 
   resetPassword: (payload: { sessionId: string; newPassword: string }) =>
-    apiFetch<AuthResult>("/auth/reset-password", { method: "POST", body: payload }),
+    apiFetch<AuthResult>("/auth/reset-password", {
+      method: "POST",
+      body: payload,
+    }),
 
   me: (token: string) => apiFetch<User>("/auth/me", { token }),
 
@@ -211,8 +231,11 @@ export const contentApi = {
       cacheTtlMs: CATALOG_TTL_MS,
     }),
 
-  genres: () =>
-    apiFetch<Genre[]>("/content/genres", { cacheTtlMs: CATALOG_TTL_MS }),
+  genres: (type?: ContentType) =>
+    apiFetch<Genre[]>("/content/genres", {
+      cacheTtlMs: CATALOG_TTL_MS,
+      query: { type },
+    }),
 
   countries: () =>
     apiFetch<string[]>("/content/countries", { cacheTtlMs: CATALOG_TTL_MS }),
@@ -226,10 +249,9 @@ export const contentApi = {
     apiFetch<ContentAccess>(`/content/${id}/access`, { token }),
 
   watch: (id: string, token: string, episodeId?: string) =>
-    apiFetch<WatchSources>(
-      `/content/${id}/watch${qs({ episodeId })}`,
-      { token },
-    ),
+    apiFetch<WatchSources>(`/content/${id}/watch${qs({ episodeId })}`, {
+      token,
+    }),
 
   /** Chapter body — free chapters need a login, the rest a subscription. */
   chapter: (id: string, chapterId: string, token: string) =>
@@ -272,10 +294,14 @@ export const billingApi = {
 };
 
 export const activityApi = {
-  watchlist: (token: string) => apiFetch<WatchlistItem[]>("/me/watchlist", { token }),
+  watchlist: (token: string) =>
+    apiFetch<WatchlistItem[]>("/me/watchlist", { token }),
 
   addWatchlist: (token: string, contentId: string) =>
-    apiFetch<WatchlistItem>(`/me/watchlist/${contentId}`, { method: "POST", token }),
+    apiFetch<WatchlistItem>(`/me/watchlist/${contentId}`, {
+      method: "POST",
+      token,
+    }),
 
   removeWatchlist: (token: string, contentId: string) =>
     apiFetch<{ success: boolean }>(`/me/watchlist/${contentId}`, {
@@ -323,15 +349,19 @@ export const activityApi = {
     },
   ) => apiFetch("/me/history", { method: "PUT", body: payload, token }),
 
-  rate: (token: string, payload: { contentId: string; score: number; review?: string }) =>
-    apiFetch("/me/ratings", { method: "PUT", body: payload, token }),
+  rate: (
+    token: string,
+    payload: { contentId: string; score: number; review?: string },
+  ) => apiFetch("/me/ratings", { method: "PUT", body: payload, token }),
 };
 
 export const adminApi = {
   stats: (token: string) => apiFetch<AdminStats>("/admin/stats", { token }),
 
-  users: (token: string, params: { search?: string; page?: number; limit?: number } = {}) =>
-    apiFetch<Paged<AdminUser>>(`/admin/users${qs(params)}`, { token }),
+  users: (
+    token: string,
+    params: { search?: string; page?: number; limit?: number } = {},
+  ) => apiFetch<Paged<AdminUser>>(`/admin/users${qs(params)}`, { token }),
 
   user: (token: string, id: string) =>
     apiFetch<AdminUserDetail>(`/admin/users/${id}`, { token }),
@@ -344,17 +374,30 @@ export const adminApi = {
     }),
 
   cancelSubscription: (token: string, subscriptionId: string) =>
-    apiFetch(`/admin/subscriptions/${subscriptionId}`, { method: "DELETE", token }),
+    apiFetch(`/admin/subscriptions/${subscriptionId}`, {
+      method: "DELETE",
+      token,
+    }),
 
   payments: (
     token: string,
-    params: { status?: string; search?: string; page?: number; limit?: number } = {},
+    params: {
+      status?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    } = {},
   ) => apiFetch<Paged<Payment>>(`/admin/payments${qs(params)}`, { token }),
 
   // Content management (admin views of the content endpoints)
   contentList: (
     token: string,
-    params: { status?: string; search?: string; page?: number; limit?: number } = {},
+    params: {
+      status?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    } = {},
   ) => apiFetch<Paged<Content>>(`/content/admin/all${qs(params)}`, { token }),
 
   contentGet: (token: string, idOrSlug: string) =>
@@ -367,16 +410,27 @@ export const adminApi = {
     apiFetch<Content>(`/content/${id}`, { method: "PATCH", body, token }),
 
   contentDelete: (token: string, id: string) =>
-    apiFetch<{ success: boolean }>(`/content/${id}`, { method: "DELETE", token }),
+    apiFetch<{ success: boolean }>(`/content/${id}`, {
+      method: "DELETE",
+      token,
+    }),
 
-  addSeason: (token: string, contentId: string, body: { number: number; title?: string }) =>
+  addSeason: (
+    token: string,
+    contentId: string,
+    body: { number: number; title?: string },
+  ) =>
     apiFetch(`/content/${contentId}/seasons`, { method: "POST", body, token }),
 
   removeSeason: (token: string, seasonId: string) =>
     apiFetch(`/content/seasons/${seasonId}`, { method: "DELETE", token }),
 
   addEpisode: (token: string, seasonId: string, body: unknown) =>
-    apiFetch(`/content/seasons/${seasonId}/episodes`, { method: "POST", body, token }),
+    apiFetch(`/content/seasons/${seasonId}/episodes`, {
+      method: "POST",
+      body,
+      token,
+    }),
 
   removeEpisode: (token: string, episodeId: string) =>
     apiFetch(`/content/episodes/${episodeId}`, { method: "DELETE", token }),
@@ -388,19 +442,29 @@ export const adminApi = {
     token: string,
     contentId: string,
     body: { number: number; title: string; body: string },
-  ) => apiFetch(`/content/${contentId}/chapters`, { method: "POST", body, token }),
+  ) =>
+    apiFetch(`/content/${contentId}/chapters`, { method: "POST", body, token }),
 
   updateChapter: (
     token: string,
     chapterId: string,
     body: { number?: number; title?: string; body?: string },
-  ) => apiFetch(`/content/chapters/${chapterId}`, { method: "PATCH", body, token }),
+  ) =>
+    apiFetch(`/content/chapters/${chapterId}`, {
+      method: "PATCH",
+      body,
+      token,
+    }),
 
   removeChapter: (token: string, chapterId: string) =>
     apiFetch(`/content/chapters/${chapterId}`, { method: "DELETE", token }),
 
   addVideoAsset: (token: string, contentId: string, body: unknown) =>
-    apiFetch(`/content/${contentId}/video-assets`, { method: "POST", body, token }),
+    apiFetch(`/content/${contentId}/video-assets`, {
+      method: "POST",
+      body,
+      token,
+    }),
 
   removeVideoAsset: (token: string, assetId: string) =>
     apiFetch(`/content/video-assets/${assetId}`, { method: "DELETE", token }),
@@ -426,7 +490,10 @@ export const storageApi = {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) {
-      throw new ApiError(normalizeError(data) ?? "Файл хуулж чадсангүй", res.status);
+      throw new ApiError(
+        normalizeError(data) ?? "Файл хуулж чадсангүй",
+        res.status,
+      );
     }
     return data as { key: string; url: string };
   },
@@ -434,7 +501,12 @@ export const storageApi = {
   presign: (
     token: string,
     body: { folder: string; filename: string; contentType: string },
-  ) => apiFetch<PresignResult>("/storage/presign", { method: "POST", body, token }),
+  ) =>
+    apiFetch<PresignResult>("/storage/presign", {
+      method: "POST",
+      body,
+      token,
+    }),
 
   /** Local mode: video/trailer goes through the API onto the server disk. */
   async uploadVideoLocal(

@@ -170,6 +170,7 @@ model Genre {
   id   String @id @default(uuid())
   name String @unique
   slug String @unique
+  types ContentType[]
 
   contents ContentGenre[]
 }

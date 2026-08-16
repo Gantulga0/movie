@@ -139,10 +139,16 @@ export function ContentForm({
   const [allGenres, setAllGenres] = useState<Genre[]>([]);
 
   useEffect(() => {
-    contentApi.genres().then(setAllGenres).catch(() => setAllGenres([]));
-  }, []);
+    contentApi
+      .genres(values.type)
+      .then(setAllGenres)
+      .catch(() => setAllGenres([]));
+  }, [values.type]);
 
-  function set<K extends keyof ContentFormValues>(key: K, value: ContentFormValues[K]) {
+  function set<K extends keyof ContentFormValues>(
+    key: K,
+    value: ContentFormValues[K],
+  ) {
     setValues((v) => ({ ...v, [key]: value }));
   }
 
@@ -485,8 +491,8 @@ export function ContentForm({
           {!values.subscriptionIncluded &&
           (values.type === "NOVEL" || !values.isRentable) ? (
             <p className="mt-3 text-xs text-gold">
-              Анхаар: багцад ч багтахгүй, түрээслэгдэхгүй бол энэ контентыг
-              хэн ч үзэж чадахгүй (түр хаагдсан төлөв).
+              Анхаар: багцад ч багтахгүй, түрээслэгдэхгүй бол энэ контентыг хэн
+              ч үзэж чадахгүй (түр хаагдсан төлөв).
             </p>
           ) : null}
         </fieldset>

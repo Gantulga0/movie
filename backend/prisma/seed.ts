@@ -1,9 +1,4 @@
-import {
-  ContentStatus,
-  ContentType,
-  PrismaClient,
-  Role,
-} from '@prisma/client';
+import { ContentStatus, ContentType, PrismaClient, Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -17,25 +12,41 @@ const PLANS = [
 ];
 
 const GENRES = [
-  { name: 'Адал явдалт', slug: 'adventure' },
-  { name: 'Тулаант', slug: 'action' },
-  { name: 'Инээдмийн', slug: 'comedy' },
-  { name: 'Драм', slug: 'drama' },
-  { name: 'Аймшгийн', slug: 'horror' },
-  { name: 'Триллер', slug: 'thriller' },
-  { name: 'Шинжлэх ухааны', slug: 'sci-fi' },
-  { name: 'Фантази', slug: 'fantasy' },
-  { name: 'Гэмт хэрэгт', slug: 'crime' },
-  { name: 'Романтик', slug: 'romance' },
-  { name: 'Анимэ', slug: 'anime' },
-  { name: 'Баримтат', slug: 'documentary' },
-  { name: 'Гэр бүлийн', slug: 'family' },
+  { name: 'Адал явдалт', slug: 'adventure', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: 'Тулаант', slug: 'action', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: 'Инээдмийн', slug: 'comedy', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: 'Драм', slug: 'drama', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: 'Аймшгийн', slug: 'horror', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: 'Триллер', slug: 'thriller', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: 'Шинжлэх ухааны', slug: 'sci-fi', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: 'Фантази', slug: 'fantasy', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: 'Гэмт хэрэгт', slug: 'crime', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: 'Романтик', slug: 'romance', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: 'Анимэ', slug: 'anime', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: 'Баримтат', slug: 'documentary', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: 'Гэр бүлийн', slug: 'family', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: 'Уншдаг өгүүллэг', slug: 'unshdag-oguulleg', types: [ContentType.NOVEL] },
+  { name: 'Сонсдог өгүүллэг', slug: 'sonsdog-oguulleg', types: [ContentType.NOVEL] },
+  { name: '+18 Монгол', slug: '18-mongol', types: [ContentType.NOVEL] },
+  { name: '+18 гадаад', slug: '18-gadaad', types: [ContentType.NOVEL] },
+  {
+    name: 'Нэрээ нууцалсан захидал',
+    slug: 'nereee-nuutsalsan-zahidал',
+    types: [ContentType.NOVEL],
+  },
 ];
 
 async function main() {
   // ---- Admin -------------------------------------------------------------
-  const adminPhone = process.env.ADMIN_PHONE ?? '99000000';
-  const adminPassword = process.env.ADMIN_PASSWORD ?? 'Admin123!';
+  const adminPhone = process.env.ADMIN_PHONE!;
+  const adminPassword = process.env.ADMIN_PASSWORD!;
+  const adminEmail = process.env.ADMIN_EMAIL!;
+
+  if (!adminPhone || !adminPassword || !adminEmail) {
+    throw new Error(
+      'ADMIN_PHONE, ADMIN_PASSWORD, ADMIN_EMAIL must be set in environment variables'
+    );
+  }
   const passwordHash = await bcrypt.hash(adminPassword, 12);
 
   const admin = await prisma.user.upsert({
@@ -45,7 +56,7 @@ async function main() {
       publicId: '100000',
       name: 'Admin',
       phone: adminPhone,
-      email: process.env.ADMIN_EMAIL ?? 'admin@movie.local',
+      email: adminEmail,
       passwordHash,
       role: Role.ADMIN,
       verified: true,
@@ -66,149 +77,13 @@ async function main() {
   for (const genre of GENRES) {
     await prisma.genre.upsert({
       where: { slug: genre.slug },
-      update: { name: genre.name },
+      update: { name: genre.name, types: genre.types },
       create: genre,
     });
   }
-
-  // ---- Sample content (dev convenience; safe to delete in admin) -----------
-  // Poster/backdrop paths point at the frontend's /public folder so local
-  // images can be dropped in without any upload step.
-  const samples = [
-    {
-      title: 'John Wick: Chapter 4',
-      slug: 'john-wick-chapter-4',
-      posterUrl: '/posters/john-wick-chapter-4.jpg',
-      backdropUrl: '/backdrops/john-wick-chapter-4.jpg',
-      description:
-        'Жон Уик Дээд Ширээг ялах арга замыг олж, дэлхий даяарх хамгийн аюултай алуурчидтай тулгарна.',
-      type: ContentType.MOVIE,
-      status: ContentStatus.PUBLISHED,
-      releaseYear: 2023,
-      durationSec: 169 * 60,
-      language: 'en',
-      country: 'USA',
-      cast: ['Keanu Reeves', 'Donnie Yen', 'Bill Skarsgård'],
-      featured: true,
-      genreSlugs: ['action', 'thriller', 'crime'],
-    },
-    {
-      title: 'Godzilla Minus One',
-      slug: 'godzilla-minus-one',
-      posterUrl: '/posters/godzilla-minus-one.jpg',
-      backdropUrl: '/backdrops/godzilla-minus-one.jpg',
-      description:
-        'Дайны дараах Япон улс аймшигт шинэ мангасын аюулд өртөнө. Амьд үлдсэн нэгэн нисгэгч өөрийн гэм буруутай тэмцэж, эх орноо хамгаалахын төлөө тэмцэнэ.',
-      type: ContentType.MOVIE,
-      status: ContentStatus.PUBLISHED,
-      releaseYear: 2023,
-      durationSec: 124 * 60,
-      language: 'ja',
-      country: 'Japan',
-      cast: ['Ryunosuke Kamiki', 'Minami Hamabe'],
-      featured: true,
-      genreSlugs: ['sci-fi', 'drama', 'action'],
-    },
-    {
-      title: 'The Bear',
-      slug: 'the-bear',
-      posterUrl: '/posters/the-bear.jpg',
-      backdropUrl: '/backdrops/the-bear.jpg',
-      description:
-        'Залуу тогооч ахынхаа гэнэтийн үхлийн дараа гэр бүлийнхээ жижиг зоогийн газрыг авч үлдэхийн тулд Чикаго руу буцаж ирнэ.',
-      type: ContentType.SERIES,
-      status: ContentStatus.PUBLISHED,
-      releaseYear: 2022,
-      language: 'en',
-      country: 'USA',
-      cast: ['Jeremy Allen White', 'Ayo Edebiri', 'Ebon Moss-Bachrach'],
-      featured: false,
-      genreSlugs: ['drama', 'comedy'],
-    },
-  ];
-
-  for (const { genreSlugs, ...sample } of samples) {
-    const exists = await prisma.content.findUnique({
-      where: { slug: sample.slug },
-    });
-    if (exists) {
-      // Only fill in images that are still empty — never overwrite what an
-      // admin uploaded through the panel.
-      await prisma.content.update({
-        where: { id: exists.id },
-        data: {
-          posterUrl: exists.posterUrl ?? sample.posterUrl,
-          backdropUrl: exists.backdropUrl ?? sample.backdropUrl,
-        },
-      });
-      continue;
-    }
-
-    const created = await prisma.content.create({ data: sample });
-    for (const slug of genreSlugs) {
-      const genre = await prisma.genre.findUnique({ where: { slug } });
-      if (genre) {
-        await prisma.contentGenre.create({
-          data: { contentId: created.id, genreId: genre.id },
-        });
-      }
-    }
-
-    // Series get one season with a couple of placeholder episodes.
-    if (sample.type === ContentType.SERIES) {
-      const season = await prisma.season.create({
-        data: { contentId: created.id, number: 1, title: 'Улирал 1' },
-      });
-      await prisma.episode.createMany({
-        data: [
-          { seasonId: season.id, number: 1, title: 'System', durationSec: 28 * 60 },
-          { seasonId: season.id, number: 2, title: 'Hands', durationSec: 25 * 60 },
-        ],
-      });
-    }
-  }
-
-  // ---- Sample novel (first 2 chapters free) --------------------------------
-  const novelSlug = 'suudriin-tuuh';
-  const novelExists = await prisma.content.findUnique({
-    where: { slug: novelSlug },
-  });
-  if (!novelExists) {
-    const novel = await prisma.content.create({
-      data: {
-        title: 'Сүүдрийн түүх',
-        slug: novelSlug,
-        description:
-          'Нэгэн жирийн оюутан үл үзэгдэх ертөнцийн хаалгыг санамсаргүй нээснээр амьдрал нь бүрмөсөн өөрчлөгдөнө. Бүлэг тутамд шинэчлэгдэх фантази бичвэр.',
-        type: ContentType.NOVEL,
-        status: ContentStatus.PUBLISHED,
-        releaseYear: 2026,
-        language: 'mn',
-        country: 'Mongolia',
-        freeChapterCount: 2,
-      },
-    });
-    const fantasy = await prisma.genre.findUnique({ where: { slug: 'fantasy' } });
-    if (fantasy) {
-      await prisma.contentGenre.create({
-        data: { contentId: novel.id, genreId: fantasy.id },
-      });
-    }
-    const paragraph = (n: number) =>
-      `Энэ бол ${n}-р бүлгийн туршилтын догол мөр юм. Бодит бичвэр админ панелаас орно.\n\nХоёр дахь догол мөр — догол мөрүүд хоосон мөрөөр ялгагдана.`;
-    await prisma.chapter.createMany({
-      data: Array.from({ length: 5 }, (_, i) => ({
-        contentId: novel.id,
-        number: i + 1,
-        title: `Бүлэг ${i + 1}`,
-        body: paragraph(i + 1),
-      })),
-    });
-  }
-
   // eslint-disable-next-line no-console
   console.log(
-    `Seeded admin (${admin.email}, publicId=${admin.publicId}), ${PLANS.length} plans, ${GENRES.length} genres, ${samples.length} contents.`,
+    `Seeded admin (${admin.email}, publicId=${admin.publicId}), ${PLANS.length} plans, ${GENRES.length} genres`
   );
 }
 
