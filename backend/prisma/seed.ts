@@ -31,7 +31,7 @@ const GENRES = [
   { name: '+18 гадаад', slug: '18-gadaad', types: [ContentType.NOVEL] },
   {
     name: 'Нэрээ нууцалсан захидал',
-    slug: 'nereee-nuutsalsan-zahidал',
+    slug: 'nereee-nuutsalsan-zahidal',
     types: [ContentType.NOVEL],
   },
 ];

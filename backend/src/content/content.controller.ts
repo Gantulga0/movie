@@ -9,7 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { ContentType, Role } from '@prisma/client';
 import { ContentService } from './content.service';
 import { CreateContentDto } from './dto/create-content.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
@@ -37,8 +37,8 @@ export class ContentController {
 
   // Static segments are declared before ':idOrSlug'.
   @Get('genres')
-  genres() {
-    return this.content.listGenres();
+  genres(@Query('type') type?: ContentType) {
+    return this.content.listGenres(type);
   }
 
   /** Distinct countries for the browse-page country filter. */
@@ -86,7 +86,7 @@ export class ContentController {
   readChapter(
     @Param('id') id: string,
     @Param('chapterId') chapterId: string,
-    @CurrentUser() user: SafeUser,
+    @CurrentUser() user: SafeUser
   ) {
     return this.content.readChapter(id, chapterId, user);
   }
@@ -158,10 +158,7 @@ export class ContentController {
   @Patch('episodes/:episodeId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  updateEpisode(
-    @Param('episodeId') episodeId: string,
-    @Body() dto: CreateEpisodeDto,
-  ) {
+  updateEpisode(@Param('episodeId') episodeId: string, @Body() dto: CreateEpisodeDto) {
     return this.content.updateEpisode(episodeId, dto);
   }
 
@@ -184,10 +181,7 @@ export class ContentController {
   @Patch('chapters/:chapterId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  updateChapter(
-    @Param('chapterId') chapterId: string,
-    @Body() dto: UpdateChapterDto,
-  ) {
+  updateChapter(@Param('chapterId') chapterId: string, @Body() dto: UpdateChapterDto) {
     return this.content.updateChapter(chapterId, dto);
   }
 
