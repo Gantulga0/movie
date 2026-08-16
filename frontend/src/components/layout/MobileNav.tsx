@@ -8,6 +8,7 @@ import {
   IconCompass,
   IconHome,
   IconSearch,
+  IconSettings,
 } from "@/components/ui/icons";
 
 const ITEMS = [
@@ -15,6 +16,7 @@ const ITEMS = [
   { href: "/search", label: "Хайх", icon: IconSearch },
   { href: "/browse", label: "Ангилал", icon: IconCompass },
   { href: "/my-list", label: "Жагсаалт", icon: IconBookmark },
+  { href: "/settings", label: "Тохиргоо", icon: IconSettings },
 ];
 
 /**
@@ -24,6 +26,10 @@ const ITEMS = [
 export function MobileNav({ onProfile }: { onProfile: () => void }) {
   const pathname = usePathname();
   const { user } = useAuth();
+  const navItems =
+    user?.role === "ADMIN"
+      ? [...ITEMS, { href: "/admin", label: "Админ", icon: IconSettings }]
+      : ITEMS;
 
   return (
     <nav
@@ -37,8 +43,12 @@ export function MobileNav({ onProfile }: { onProfile: () => void }) {
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-full h-40 bg-background-deep"
       />
-      <div className="grid grid-cols-5 px-2 pb-2 pt-3">
-        {ITEMS.map((item) => {
+      <div
+        className={`grid px-2 pb-2 pt-3 ${
+          user?.role === "ADMIN" ? "grid-cols-6" : "grid-cols-5"
+        }`}
+      >
+        {navItems.map((item) => {
           const active =
             pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;
