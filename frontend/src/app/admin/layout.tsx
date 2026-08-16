@@ -13,7 +13,11 @@ const NAV = [
   { href: "/admin/payments", label: "Төлбөр" },
 ];
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, loading } = useAuth();
@@ -76,6 +80,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="min-w-0 flex-1">
         {/* Mobile top bar */}
         <div className="flex items-center gap-4 overflow-x-auto border-b border-line px-4 py-3 md:hidden">
+          <Link
+            href="/home"
+            className="whitespace-nowrap rounded-md bg-white/5 px-3 py-1.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+          >
+            ← Нүүр
+          </Link>
           {NAV.map((item) => (
             <Link
               key={item.href}

@@ -202,7 +202,7 @@ export default function LandingPage() {
               ))}
             </div>
 
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-white/80 sm:text-lg">
+            <p className="mt-5 max-w-xl line-clamp-4 text-base leading-relaxed text-white/80 sm:text-lg">
               {slide.description}
             </p>
 
