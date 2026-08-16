@@ -22,8 +22,7 @@ const display = Sofia_Sans_Condensed({
 
 export const metadata: Metadata = {
   title: "Шивнээ",
-  description:
-    "Шивнээ Өгүүллэг",
+  description: "Шивнээ",
 };
 
 // viewport-fit=cover makes env(safe-area-inset-*) real on iOS, so the

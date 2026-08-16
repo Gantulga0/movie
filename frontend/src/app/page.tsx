@@ -7,6 +7,7 @@ import { Logo } from "@/components/Logo";
 import { useAuth } from "@/lib/auth-context";
 import { contentApi } from "@/lib/api";
 import type { Content } from "@/lib/types";
+import { LineWaves } from "@/components/LineWaves";
 
 interface Slide {
   tag: string;
@@ -86,6 +87,7 @@ export default function LandingPage() {
           className="absolute inset-0"
           style={{ background: BASE_GRADIENT }}
         />
+        {!slide ? <LineWaves className="absolute inset-0" /> : null}
         {slides?.map((s, i) => (
           <div
             key={s.title}
