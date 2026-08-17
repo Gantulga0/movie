@@ -41,6 +41,8 @@ function HomeContent() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [newest, setNewest] = useState<Content[]>([]);
   const [newestLoading, setNewestLoading] = useState(true);
+  const [novels, setNovels] = useState<Content[]>([]);
+  const [novelsLoading, setNovelsLoading] = useState(true);
   const [genreRows, setGenreRows] = useState<
     Array<{ genre: Genre; items: Content[] }>
   >([]);
@@ -60,19 +62,36 @@ function HomeContent() {
       .catch(() => setNewest([]))
       .finally(() => setNewestLoading(false));
 
+    // Novels get their own rail — they don't belong in the movie genre rows.
+    contentApi
+      .list({ type: "NOVEL", sort: "new", limit: ROW_ITEM_LIMIT })
+      .then((res) => setNovels(res.items))
+      .catch(() => setNovels([]))
+      .finally(() => setNovelsLoading(false));
+
     // Genre rails come from real genre data; empty genres are dropped.
+    // Check every genre first, THEN cap the row count — slicing before the
+    // content check can land on 8 empty genres and render nothing at all.
     contentApi
       .genres()
       .then(async (genres) => {
+        const movieGenres = genres.filter(
+          (g) =>
+            !g.types?.length ||
+            g.types.includes("MOVIE") ||
+            g.types.includes("SERIES"),
+        );
         const rows = await Promise.all(
-          genres.slice(0, GENRE_ROW_LIMIT).map(async (genre) => {
+          movieGenres.map(async (genre) => {
             const res = await contentApi
               .list({ genre: genre.slug, limit: ROW_ITEM_LIMIT })
               .catch(() => null);
             return { genre, items: res?.items ?? [] };
           }),
         );
-        setGenreRows(rows.filter((r) => r.items.length > 0));
+        setGenreRows(
+          rows.filter((r) => r.items.length > 0).slice(0, GENRE_ROW_LIMIT),
+        );
       })
       .catch(() => setGenreRows([]))
       .finally(() => setGenresLoading(false));
@@ -154,6 +173,22 @@ function HomeContent() {
           />
         ))}
       </ContentRow>
+
+      {novelsLoading || novels.length > 0 ? (
+        <ContentRow
+          title="Бичвэр"
+          viewAllHref="/browse?type=NOVEL"
+          loading={novelsLoading}
+        >
+          {novels.map((content) => (
+            <ContentCard
+              key={content.id}
+              content={content}
+              progressPercent={progressByContent.get(content.id)}
+            />
+          ))}
+        </ContentRow>
+      ) : null}
 
       {genresLoading ? (
         <ContentRow title="Ангилал" loading>

@@ -58,6 +58,8 @@ export interface Genre {
   id: string;
   name: string;
   slug: string;
+  /** Which content types the genre applies to (empty = any). */
+  types?: ContentType[];
 }
 
 export interface EpisodeSummary {
