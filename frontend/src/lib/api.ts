@@ -538,16 +538,18 @@ export const storageApi = {
     });
   },
 
-  /** Big files (movies, trailers) PUT straight to R2 with the presigned URL. */
+  /** Big files (movies, trailers) PUT straight to R2 with the presigned URL.
+   *  contentType MUST match what the URL was presigned with, or R2 returns 403. */
   async uploadDirect(
     presigned: PresignResult,
     file: File,
     onProgress?: (percent: number) => void,
+    contentType?: string,
   ): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", presigned.uploadUrl);
-      xhr.setRequestHeader("Content-Type", file.type);
+      xhr.setRequestHeader("Content-Type", contentType ?? file.type);
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable && onProgress) {
           onProgress(Math.round((e.loaded / e.total) * 100));
@@ -556,8 +558,21 @@ export const storageApi = {
       xhr.onload = () =>
         xhr.status >= 200 && xhr.status < 300
           ? resolve()
-          : reject(new ApiError("Файл хуулж чадсангүй", xhr.status));
-      xhr.onerror = () => reject(new ApiError("Файл хуулж чадсангүй", 0));
+          : reject(
+              new ApiError(
+                xhr.status === 403
+                  ? "R2 хандалт татгалзлаа (403) — bucket-ийн эрх/CORS тохиргоог шалгана уу"
+                  : `Файл хуулж чадсангүй (${xhr.status})`,
+                xhr.status,
+              ),
+            );
+      xhr.onerror = () =>
+        reject(
+          new ApiError(
+            "R2 руу холбогдож чадсангүй — bucket-ийн CORS тохиргоог шалгана уу",
+            0,
+          ),
+        );
       xhr.send(file);
     });
   },

@@ -30,12 +30,15 @@ async function uploadVideoFile(
   onProgress: (p: number) => void,
 ): Promise<{ key: string; url: string }> {
   if (mode === "r2") {
+    // .mkv etc. have no browser MIME type — presign and PUT must agree on
+    // the same fallback or R2 rejects the signature with a 403.
+    const contentType = file.type || "video/mp4";
     const presigned = await storageApi.presign(token, {
       folder,
       filename: file.name,
-      contentType: file.type || "video/mp4",
+      contentType,
     });
-    await storageApi.uploadDirect(presigned, file, onProgress);
+    await storageApi.uploadDirect(presigned, file, onProgress, contentType);
     return { key: presigned.key, url: presigned.url };
   }
   return storageApi.uploadVideoLocal(token, folder, file, onProgress);
@@ -191,8 +194,12 @@ export function VideoAssetsSection({
         sizeBytes: file.size,
       });
       onChanged();
-    } catch {
-      setError("Видео хуулж чадсангүй. Дахин оролдоно уу.");
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? `Видео хуулж чадсангүй: ${err.message}`
+          : "Видео хуулж чадсангүй. Дахин оролдоно уу.",
+      );
     } finally {
       setBusy(false);
     }

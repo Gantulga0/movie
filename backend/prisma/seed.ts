@@ -25,6 +25,7 @@ const GENRES = [
   { name: 'Анимэ', slug: 'anime', types: [ContentType.MOVIE, ContentType.SERIES] },
   { name: 'Баримтат', slug: 'documentary', types: [ContentType.MOVIE, ContentType.SERIES] },
   { name: 'Гэр бүлийн', slug: 'family', types: [ContentType.MOVIE, ContentType.SERIES] },
+  { name: '+18', slug: 'adult', types: [ContentType.MOVIE, ContentType.SERIES] },
   { name: 'Уншдаг өгүүллэг', slug: 'unshdag-oguulleg', types: [ContentType.NOVEL] },
   { name: 'Сонсдог өгүүллэг', slug: 'sonsdog-oguulleg', types: [ContentType.NOVEL] },
   { name: '+18 Монгол', slug: '18-mongol', types: [ContentType.NOVEL] },
