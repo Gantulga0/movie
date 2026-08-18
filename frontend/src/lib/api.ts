@@ -441,14 +441,28 @@ export const adminApi = {
   addChapter: (
     token: string,
     contentId: string,
-    body: { number: number; title: string; body: string },
+    body: {
+      number: number;
+      title: string;
+      body?: string;
+      mediaUrl?: string;
+      mediaR2Key?: string;
+      mediaMimeType?: string;
+    },
   ) =>
     apiFetch(`/content/${contentId}/chapters`, { method: "POST", body, token }),
 
   updateChapter: (
     token: string,
     chapterId: string,
-    body: { number?: number; title?: string; body?: string },
+    body: {
+      number?: number;
+      title?: string;
+      body?: string;
+      mediaUrl?: string;
+      mediaR2Key?: string;
+      mediaMimeType?: string;
+    },
   ) =>
     apiFetch(`/content/chapters/${chapterId}`, {
       method: "PATCH",

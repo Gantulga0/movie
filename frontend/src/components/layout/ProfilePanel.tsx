@@ -30,7 +30,14 @@ export function ProfilePanel({ open, onClose }: ProfilePanelProps) {
   const { user, logout } = useAuth();
   // Subscription state is served from the app-wide cache — the sheet opens
   // instantly; a silent refresh keeps it honest.
-  const { subscription: active, loading, refresh } = useSubscription();
+  const { subscriptions, loading, refresh } = useSubscription();
+  // Compact panel shows one card: the full-access plan wins, else the
+  // longest-running category plan; the rest get a small "+N" note.
+  const active =
+    subscriptions.find((s) => (s.plan.genreSlugs?.length ?? 0) === 0) ??
+    subscriptions[0] ??
+    null;
+  const extraCount = active ? subscriptions.length - 1 : 0;
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -202,6 +209,12 @@ export function ProfilePanel({ open, onClose }: ProfilePanelProps) {
                   </span>
                 </span>
               </div>
+
+              {extraCount > 0 ? (
+                <p className="mt-2 text-xs text-muted">
+                  + өөр {extraCount} багц идэвхтэй
+                </p>
+              ) : null}
             </div>
           ) : (
             <div className="mt-3 rounded-2xl border border-dashed border-line-strong bg-surface-raised/40 p-5 text-center">

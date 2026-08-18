@@ -17,7 +17,7 @@ import {
   SeasonsSection,
   VideoAssetsSection,
 } from "@/components/AdminMedia";
-import { ChaptersSection } from "@/components/AdminChapters";
+import { ChaptersSection, SingleChapterSection } from "@/components/AdminChapters";
 
 /**
  * Two-step create: 1) basic info, 2) poster/backdrop/trailer/video uploads
@@ -67,7 +67,9 @@ export default function NewContentPage() {
         </div>
         <p className="mt-1 text-sm text-white/50">
           {created.type === "NOVEL"
-            ? "2-р алхам — зураг болон бүлгүүдээ оруулна уу."
+            ? created.singleChapter
+              ? "2-р алхам — зураг болон агуулгаа оруулна уу."
+              : "2-р алхам — зураг болон бүлгүүдээ оруулна уу."
             : "2-р алхам — зураг, трейлер, видео файлуудаа оруулна уу."}
         </p>
 
@@ -76,7 +78,11 @@ export default function NewContentPage() {
           {created.type === "SERIES" ? (
             <SeasonsSection content={created} onChanged={reload} />
           ) : created.type === "NOVEL" ? (
-            <ChaptersSection content={created} onChanged={reload} />
+            created.singleChapter ? (
+              <SingleChapterSection content={created} onChanged={reload} />
+            ) : (
+              <ChaptersSection content={created} onChanged={reload} />
+            )
           ) : (
             <VideoAssetsSection
               contentId={created.id}

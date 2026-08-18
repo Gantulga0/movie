@@ -297,11 +297,6 @@ function TitleContent() {
                   {content.releaseYear}
                 </span>
               ) : null}
-              {content.ageRating ? (
-                <span className="rounded border border-line-strong px-1.5 py-0.5 text-xs">
-                  {content.ageRating}
-                </span>
-              ) : null}
               {!isSeries && content.durationSec ? (
                 <span>{formatDuration(content.durationSec)}</span>
               ) : null}
@@ -374,6 +369,7 @@ function TitleContent() {
             {showAccessOptions && access ? (
               <AccessOptions
                 access={access}
+                genreSlugs={content.genres.map((g) => g.genre.slug)}
                 renting={renting}
                 onRent={startRent}
               />
@@ -394,7 +390,7 @@ function TitleContent() {
                   {resume ? "Үргэлжлүүлэх" : "Үзэх"}
                 </ButtonLink>
               ) : null}
-              {content.trailerUrl ? (
+              {content.trailerUrl && !isNovel ? (
                 <Button
                   variant="outline"
                   size="lg"
@@ -526,7 +522,7 @@ function TitleContent() {
       ) : null}
 
       {/* Trailer dialog */}
-      {content.trailerUrl ? (
+      {content.trailerUrl && !isNovel ? (
         <Modal
           open={trailerOpen}
           onClose={() => setTrailerOpen(false)}

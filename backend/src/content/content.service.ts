@@ -4,8 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ContentStatus, ContentType, Prisma, Role, SubscriptionStatus } from '@prisma/client';
+import { ContentStatus, ContentType, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { activePlanScopes, scopesCover } from '../billing/subscription-access';
 import { StorageService } from '../storage/storage.service';
 import { SafeUser } from '../users/users.service';
 import { slugify, slugWithSuffix } from '../common/ids';
@@ -127,7 +128,9 @@ export class ContentService {
   async access(contentId: string, user: SafeUser) {
     const now = new Date();
     // All three lookups are independent — one parallel burst, not a chain.
-    const [content, subscription, rental] = await Promise.all([
+    // Plan scopes don't depend on the content row; the genre intersection
+    // happens in JS afterwards.
+    const [content, planScopes, rental] = await Promise.all([
       this.prisma.content.findFirst({
         where: { id: contentId, status: ContentStatus.PUBLISHED },
         select: {
@@ -136,17 +139,10 @@ export class ContentService {
           isRentable: true,
           rentalPrice: true,
           rentalDurationHours: true,
+          genres: { select: { genre: { select: { slug: true } } } },
         },
       }),
-      this.prisma.subscription.findFirst({
-        where: {
-          userId: user.id,
-          status: SubscriptionStatus.ACTIVE,
-          endsAt: { gt: now },
-        },
-        orderBy: { endsAt: 'desc' },
-        select: { endsAt: true },
-      }),
+      activePlanScopes(this.prisma, user.id, now),
       this.prisma.rental.findFirst({
         where: { userId: user.id, contentId, endsAt: { gt: now } },
         orderBy: { endsAt: 'desc' },
@@ -155,7 +151,10 @@ export class ContentService {
     ]);
     if (!content) throw new NotFoundException('Контент олдсонгүй');
 
-    const viaSubscription = Boolean(content.subscriptionIncluded && subscription);
+    const viaSubscription = Boolean(
+      content.subscriptionIncluded &&
+        scopesCover(planScopes, content.genres.map((g) => g.genre.slug)),
+    );
     const viaRental = Boolean(rental);
 
     return {
@@ -202,7 +201,13 @@ export class ContentService {
           // Chapter bodies stay behind the entitlement-checked read route.
           chapters: {
             orderBy: { number: 'asc' },
-            select: { id: true, number: true, title: true, createdAt: true },
+            select: {
+              id: true,
+              number: true,
+              title: true,
+              mediaMimeType: true,
+              createdAt: true,
+            },
           },
         },
         relationLoadStrategy: 'join',
@@ -233,7 +238,7 @@ export class ContentService {
       throw new NotFoundException('Контент олдсонгүй');
     }
     if (content.type === ContentType.NOVEL) {
-      throw new BadRequestException('Бичвэр контентыг тоглуулах боломжгүй');
+      throw new BadRequestException('Өгүүллэг контентыг тоглуулах боломжгүй');
     }
 
     // The EntitlementGuard checks access to `contentId`; make sure the
@@ -288,10 +293,11 @@ export class ContentService {
   }
 
   /**
-   * A chapter with its body. The first `freeChapterCount` chapters are open
-   * to any signed-in user; the rest require a live subscription (admins
-   * bypass). Errors reuse the EntitlementGuard's shape so the frontend's
-   * ApiError.code handling works unchanged.
+   * A chapter with its body/media. The first `freeChapterCount` chapters are
+   * open to any signed-in user; the rest require a live subscription OR an
+   * active rental — mirroring the EntitlementGuard (admins bypass). Errors
+   * reuse the guard's shape so the frontend's ApiError.code handling works
+   * unchanged.
    */
   async readChapter(contentId: string, chapterId: string, user: SafeUser) {
     const adminView = user.role === Role.ADMIN;
@@ -308,6 +314,8 @@ export class ContentService {
           type: true,
           freeChapterCount: true,
           subscriptionIncluded: true,
+          isRentable: true,
+          genres: { select: { genre: { select: { slug: true } } } },
         },
       }),
       // The contentId match blocks reading another title's chapters (IDOR).
@@ -324,17 +332,28 @@ export class ContentService {
 
     const isFree = chapter.number <= content.freeChapterCount;
     if (!isFree && !adminView) {
-      const subscription = content.subscriptionIncluded
-        ? await this.prisma.subscription.findFirst({
-            where: {
-              userId: user.id,
-              status: SubscriptionStatus.ACTIVE,
-              endsAt: { gt: new Date() },
-            },
+      const now = new Date();
+      const viaSubscription = content.subscriptionIncluded
+        ? scopesCover(
+            await activePlanScopes(this.prisma, user.id, now),
+            content.genres.map((g) => g.genre.slug),
+          )
+        : false;
+      const rental = viaSubscription
+        ? null
+        : await this.prisma.rental.findFirst({
+            where: { userId: user.id, contentId, endsAt: { gt: now } },
             select: { id: true },
-          })
-        : null;
-      if (!subscription) {
+          });
+      if (!viaSubscription && !rental) {
+        // Rental-only novels point the client at the rent flow.
+        if (content.isRentable && !content.subscriptionIncluded) {
+          throw new ForbiddenException({
+            statusCode: 403,
+            error: 'RENTAL_REQUIRED',
+            message: 'Энэ бүлгийг уншихын тулд түрээслэх шаардлагатай.',
+          });
+        }
         throw new ForbiddenException({
           statusCode: 403,
           error: 'SUBSCRIPTION_REQUIRED',
@@ -355,6 +374,8 @@ export class ContentService {
       number: chapter.number,
       title: chapter.title,
       body: chapter.body,
+      mediaUrl: await this.resolvePlaybackUrl(chapter.mediaR2Key, chapter.mediaUrl),
+      mediaMimeType: chapter.mediaMimeType,
       contentId: content.id,
       isFree,
       content: { title: content.title, slug: content.slug },
@@ -399,13 +420,12 @@ export class ContentService {
   // ----------------------------------------------------------------- admin
 
   async create(dto: CreateContentDto) {
-    if (dto.type === ContentType.NOVEL && dto.isRentable) {
-      throw new BadRequestException('Бичвэр контентыг түрээслүүлэх боломжгүй');
-    }
     if (dto.isRentable && !dto.rentalPrice) {
       throw new BadRequestException('Түрээслэх бол түрээсийн үнэ шаардлагатай');
     }
     const { genres, ...data } = dto;
+    // Novels have no trailer.
+    if (dto.type === ContentType.NOVEL) data.trailerUrl = undefined;
     try {
       return await this.prisma.content.create({
         data: {
@@ -434,10 +454,6 @@ export class ContentService {
   async update(id: string, dto: UpdateContentDto) {
     const existing = await this.requireContent(id);
     const willBeRentable = dto.isRentable ?? existing.isRentable;
-    const effectiveType = dto.type ?? existing.type;
-    if (effectiveType === ContentType.NOVEL && willBeRentable) {
-      throw new BadRequestException('Бичвэр контентыг түрээслүүлэх боломжгүй');
-    }
     const effectivePrice = dto.rentalPrice ?? existing.rentalPrice;
     if (willBeRentable && !effectivePrice) {
       throw new BadRequestException('Түрээслэх бол түрээсийн үнэ шаардлагатай');
@@ -448,10 +464,13 @@ export class ContentService {
       await this.prisma.contentGenre.deleteMany({ where: { contentId: id } });
     }
 
+    // Novels have no trailer — clear any stored one on type switch too.
+    const effectiveType = dto.type ?? existing.type;
     return this.prisma.content.update({
       where: { id },
       data: {
         ...data,
+        ...(effectiveType === ContentType.NOVEL ? { trailerUrl: null } : {}),
         ...(genres !== undefined ? { genres: this.genreConnections(genres) } : {}),
       },
       include: listInclude,
@@ -460,7 +479,11 @@ export class ContentService {
 
   async remove(id: string) {
     await this.requireContent(id);
+    // Collect storage keys BEFORE the delete — the DB cascade wipes the rows
+    // that hold them. Cleanup itself is fire-and-forget after DB success.
+    const keys = await this.collectStorageKeys(id);
     await this.prisma.content.delete({ where: { id } });
+    void this.storage.deleteObjects(keys);
     return { success: true };
   }
 
@@ -472,9 +495,22 @@ export class ContentService {
   }
 
   async removeSeason(seasonId: string) {
+    const [assets, subs] = await Promise.all([
+      this.prisma.videoAsset.findMany({
+        where: { episode: { seasonId } },
+        select: { r2Key: true, url: true },
+      }),
+      this.prisma.subtitle.findMany({
+        where: { episode: { seasonId } },
+        select: { r2Key: true, url: true },
+      }),
+    ]);
     await this.prisma.season.delete({ where: { id: seasonId } }).catch(() => {
       throw new NotFoundException('Улирал олдсонгүй');
     });
+    void this.storage.deleteObjects(
+      [...assets, ...subs].map((r) => r.r2Key ?? this.storage.keyFromUrl(r.url)),
+    );
     return { success: true };
   }
 
@@ -491,9 +527,22 @@ export class ContentService {
   }
 
   async removeEpisode(episodeId: string) {
+    const [assets, subs] = await Promise.all([
+      this.prisma.videoAsset.findMany({
+        where: { episodeId },
+        select: { r2Key: true, url: true },
+      }),
+      this.prisma.subtitle.findMany({
+        where: { episodeId },
+        select: { r2Key: true, url: true },
+      }),
+    ]);
     await this.prisma.episode.delete({ where: { id: episodeId } }).catch(() => {
       throw new NotFoundException('Анги олдсонгүй');
     });
+    void this.storage.deleteObjects(
+      [...assets, ...subs].map((r) => r.r2Key ?? this.storage.keyFromUrl(r.url)),
+    );
     return { success: true };
   }
 
@@ -502,10 +551,17 @@ export class ContentService {
   async addChapter(contentId: string, dto: CreateChapterDto) {
     const content = await this.requireContent(contentId);
     if (content.type !== ContentType.NOVEL) {
-      throw new BadRequestException('Зөвхөн бичвэр контентод бүлэг нэмнэ');
+      throw new BadRequestException('Зөвхөн өгүүллэг контентод бүлэг нэмнэ');
+    }
+    const body = dto.body?.trim() ? dto.body : '';
+    const media = this.normalizeChapterMedia(dto);
+    if (!body && !media.mediaUrl && !media.mediaR2Key) {
+      throw new BadRequestException('Бүлэгт бичвэр эсвэл медиа файл шаардлагатай');
     }
     try {
-      return await this.prisma.chapter.create({ data: { contentId, ...dto } });
+      return await this.prisma.chapter.create({
+        data: { contentId, number: dto.number, title: dto.title, body, ...media },
+      });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new BadRequestException('Бүлгийн дугаар давхардаж байна');
@@ -524,11 +580,42 @@ export class ContentService {
   }
 
   async updateChapter(chapterId: string, dto: UpdateChapterDto) {
+    const existing = await this.prisma.chapter.findUnique({
+      where: { id: chapterId },
+    });
+    if (!existing) throw new NotFoundException('Бүлэг олдсонгүй');
+
+    const media =
+      dto.mediaUrl !== undefined ||
+      dto.mediaR2Key !== undefined ||
+      dto.mediaMimeType !== undefined
+        ? this.normalizeChapterMedia(dto)
+        : {};
+
+    // A chapter must keep either text or media after the update.
+    const nextBody = dto.body !== undefined ? dto.body : existing.body;
+    const nextMediaUrl =
+      'mediaUrl' in media ? media.mediaUrl : existing.mediaUrl;
+    const nextMediaKey =
+      'mediaR2Key' in media ? media.mediaR2Key : existing.mediaR2Key;
+    if (!nextBody?.trim() && !nextMediaUrl && !nextMediaKey) {
+      throw new BadRequestException('Бүлэгт бичвэр эсвэл медиа файл шаардлагатай');
+    }
+
+    // Replacing or clearing the media orphans the old R2/local object — clean
+    // it up best-effort once the DB write succeeds.
+    const oldKey =
+      'mediaR2Key' in media && existing.mediaR2Key !== media.mediaR2Key
+        ? existing.mediaR2Key
+        : null;
+
     try {
-      return await this.prisma.chapter.update({
+      const updated = await this.prisma.chapter.update({
         where: { id: chapterId },
-        data: dto,
+        data: { ...dto, ...media },
       });
+      if (oldKey) void this.storage.deleteObjects([oldKey]);
+      return updated;
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
         if (err.code === 'P2002') {
@@ -543,9 +630,18 @@ export class ContentService {
   }
 
   async removeChapter(chapterId: string) {
+    const chapter = await this.prisma.chapter.findUnique({
+      where: { id: chapterId },
+      select: { mediaR2Key: true, mediaUrl: true },
+    });
     await this.prisma.chapter.delete({ where: { id: chapterId } }).catch(() => {
       throw new NotFoundException('Бүлэг олдсонгүй');
     });
+    if (chapter) {
+      void this.storage.deleteObjects([
+        chapter.mediaR2Key ?? this.storage.keyFromUrl(chapter.mediaUrl),
+      ]);
+    }
     return { success: true };
   }
 
@@ -569,9 +665,18 @@ export class ContentService {
   }
 
   async removeVideoAsset(assetId: string) {
+    const asset = await this.prisma.videoAsset.findUnique({
+      where: { id: assetId },
+      select: { r2Key: true, url: true },
+    });
     await this.prisma.videoAsset.delete({ where: { id: assetId } }).catch(() => {
       throw new NotFoundException('Видео файл олдсонгүй');
     });
+    if (asset) {
+      void this.storage.deleteObjects([
+        asset.r2Key ?? this.storage.keyFromUrl(asset.url),
+      ]);
+    }
     return { success: true };
   }
 
@@ -590,13 +695,86 @@ export class ContentService {
   }
 
   async removeSubtitle(subtitleId: string) {
+    const subtitle = await this.prisma.subtitle.findUnique({
+      where: { id: subtitleId },
+      select: { r2Key: true, url: true },
+    });
     await this.prisma.subtitle.delete({ where: { id: subtitleId } }).catch(() => {
       throw new NotFoundException('Хадмал олдсонгүй');
     });
+    if (subtitle) {
+      void this.storage.deleteObjects([
+        subtitle.r2Key ?? this.storage.keyFromUrl(subtitle.url),
+      ]);
+    }
     return { success: true };
   }
 
   // --------------------------------------------------------------- helpers
+
+  /**
+   * Every storage key a content owns: video assets and subtitles (content- and
+   * episode-level), chapter media, poster/backdrop images. Trailer/image URLs
+   * that don't point at our storage (e.g. YouTube) resolve to null and drop out.
+   */
+  private async collectStorageKeys(contentId: string): Promise<Array<string | null>> {
+    const content = await this.prisma.content.findUnique({
+      where: { id: contentId },
+      select: {
+        posterUrl: true,
+        backdropUrl: true,
+        trailerUrl: true,
+        chapters: { select: { mediaR2Key: true, mediaUrl: true } },
+        videoAssets: { select: { r2Key: true, url: true } },
+        subtitles: { select: { r2Key: true, url: true } },
+        seasons: {
+          select: {
+            episodes: {
+              select: {
+                videoAssets: { select: { r2Key: true, url: true } },
+                subtitles: { select: { r2Key: true, url: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!content) return [];
+
+    const fileKey = (row: { r2Key: string | null; url: string | null }) =>
+      row.r2Key ?? this.storage.keyFromUrl(row.url);
+
+    return [
+      this.storage.keyFromUrl(content.posterUrl),
+      this.storage.keyFromUrl(content.backdropUrl),
+      this.storage.keyFromUrl(content.trailerUrl),
+      ...content.chapters.map((c) => c.mediaR2Key ?? this.storage.keyFromUrl(c.mediaUrl)),
+      ...content.videoAssets.map(fileKey),
+      ...content.subtitles.map(fileKey),
+      ...content.seasons.flatMap((s) =>
+        s.episodes.flatMap((e) => [
+          ...e.videoAssets.map(fileKey),
+          ...e.subtitles.map(fileKey),
+        ]),
+      ),
+    ];
+  }
+
+  /** Empty strings clear media; R2-backed media never stores a permanent URL. */
+  private normalizeChapterMedia(dto: {
+    mediaUrl?: string;
+    mediaR2Key?: string;
+    mediaMimeType?: string;
+  }) {
+    const r2Key = dto.mediaR2Key?.trim() || null;
+    const url =
+      r2Key && this.storage.r2Configured ? null : dto.mediaUrl?.trim() || null;
+    return {
+      mediaUrl: url,
+      mediaR2Key: r2Key,
+      mediaMimeType: dto.mediaMimeType?.trim() || null,
+    };
+  }
 
   private async requireContent(id: string) {
     const content = await this.prisma.content.findUnique({ where: { id } });

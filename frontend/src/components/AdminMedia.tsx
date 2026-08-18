@@ -1,48 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { adminApi, storageApi } from "@/lib/api";
+import { uploadVideoFile, useStorageMode } from "@/lib/upload";
 import type { ContentDetail, VideoQuality } from "@/lib/types";
 
 const QUALITIES: VideoQuality[] = ["P480", "P720", "P1080", "P4K"];
-
-/** R2 configured → presigned direct upload; otherwise local disk upload. */
-function useStorageMode(): "r2" | "local" {
-  const { token } = useAuth();
-  const [mode, setMode] = useState<"r2" | "local">("local");
-  useEffect(() => {
-    if (!token) return;
-    storageApi
-      .mode(token)
-      .then((res) => setMode(res.mode))
-      .catch(() => setMode("local"));
-  }, [token]);
-  return mode;
-}
-
-/** Upload a video/trailer with whichever flow the backend supports. */
-async function uploadVideoFile(
-  token: string,
-  mode: "r2" | "local",
-  folder: "videos" | "trailers",
-  file: File,
-  onProgress: (p: number) => void,
-): Promise<{ key: string; url: string }> {
-  if (mode === "r2") {
-    // .mkv etc. have no browser MIME type — presign and PUT must agree on
-    // the same fallback or R2 rejects the signature with a 403.
-    const contentType = file.type || "video/mp4";
-    const presigned = await storageApi.presign(token, {
-      folder,
-      filename: file.name,
-      contentType,
-    });
-    await storageApi.uploadDirect(presigned, file, onProgress, contentType);
-    return { key: presigned.key, url: presigned.url };
-  }
-  return storageApi.uploadVideoLocal(token, folder, file, onProgress);
-}
 
 // ---------------------------------------------------------------- media
 
@@ -122,38 +86,41 @@ export function MediaSection({
         />
       </div>
 
-      <div className="mt-4">
-        <label className="text-xs font-semibold text-white/70">
-          Трейлер (YouTube линк)
-        </label>
-        <div className="mt-1.5 flex gap-2">
-          <input
-            value={trailerUrl}
-            onChange={(e) => setTrailerUrl(e.target.value)}
-            placeholder="https://www.youtube.com/watch?v=…"
-            aria-label="Трейлерийн YouTube линк"
-            className="min-w-0 flex-1 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/35 outline-none focus:border-brand"
-          />
-          <button
-            type="button"
-            onClick={saveTrailer}
-            disabled={
-              busy === "trailer" ||
-              trailerUrl.trim() === (content.trailerUrl ?? "")
-            }
-            className="rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20 disabled:opacity-40"
-          >
-            {busy === "trailer" ? "Хадгалж байна…" : "Хадгалах"}
-          </button>
+      {/* Novels have no trailer — the field only applies to movies/series. */}
+      {content.type !== "NOVEL" ? (
+        <div className="mt-4">
+          <label className="text-xs font-semibold text-white/70">
+            Трейлер (YouTube линк)
+          </label>
+          <div className="mt-1.5 flex gap-2">
+            <input
+              value={trailerUrl}
+              onChange={(e) => setTrailerUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=…"
+              aria-label="Трейлерийн YouTube линк"
+              className="min-w-0 flex-1 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/35 outline-none focus:border-brand"
+            />
+            <button
+              type="button"
+              onClick={saveTrailer}
+              disabled={
+                busy === "trailer" ||
+                trailerUrl.trim() === (content.trailerUrl ?? "")
+              }
+              className="rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20 disabled:opacity-40"
+            >
+              {busy === "trailer" ? "Хадгалж байна…" : "Хадгалах"}
+            </button>
+          </div>
+          {trailerUrl.trim() && !/youtube\.com|youtu\.be/.test(trailerUrl) ? (
+            <p className="mt-1 text-xs text-gold">
+              YouTube линк оруулна уу (youtube.com эсвэл youtu.be).
+            </p>
+          ) : content.trailerUrl ? (
+            <p className="mt-1 text-xs text-white/40">Трейлер орсон ✓</p>
+          ) : null}
         </div>
-        {trailerUrl.trim() && !/youtube\.com|youtu\.be/.test(trailerUrl) ? (
-          <p className="mt-1 text-xs text-gold">
-            YouTube линк оруулна уу (youtube.com эсвэл youtu.be).
-          </p>
-        ) : content.trailerUrl ? (
-          <p className="mt-1 text-xs text-white/40">Трейлер орсон ✓</p>
-        ) : null}
-      </div>
+      ) : null}
     </section>
   );
 }
@@ -190,7 +157,7 @@ export function VideoAssetsSection({
         quality,
         url: res.url,
         r2Key: res.key,
-        mimeType: file.type || "video/mp4",
+        mimeType: res.mimeType,
         sizeBytes: file.size,
       });
       onChanged();

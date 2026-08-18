@@ -31,7 +31,7 @@ function toSlide(content: Content): Slide {
       content.type === "SERIES"
         ? "ЦУВРАЛ"
         : content.type === "NOVEL"
-          ? "БИЧВЭР"
+          ? "ӨГҮҮЛЛЭГ"
           : "ОНЦЛОХ",
     title: content.title,
     year: content.releaseYear ? String(content.releaseYear) : "",
@@ -225,7 +225,7 @@ export default function LandingPage() {
           /* Nothing featured yet — generic pitch */
           <div className="max-w-2xl animate-rise">
             <h1 className="display text-4xl font-bold leading-tight tracking-tight text-white drop-shadow-xl sm:text-6xl lg:text-7xl">
-              Хязгааргүй кино, цуврал, аниме, бичвэр
+              Хязгааргүй кино, цуврал, аниме, өгүүллэг
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-white/80 sm:text-lg">
               Дуртай контентоо хаанаас ч, хэзээ ч тасралтгүй үзээрэй. Сарын

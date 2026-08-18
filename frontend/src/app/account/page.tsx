@@ -49,7 +49,7 @@ function AccountContent() {
   }, [token]);
 
   if (!user) return null;
-  const active = mine?.active ?? null;
+  const actives = mine?.actives ?? [];
 
   async function saveName() {
     if (!token) return;
@@ -185,14 +185,19 @@ function AccountContent() {
           </div>
           <div>
             <dt className="text-xs text-muted">Эрхийн байдал</dt>
-            <dd className="mt-1 text-sm">
-              {active ? (
-                <span className="inline-flex flex-wrap items-center gap-2">
-                  <Badge tone="success">{active.plan.name}</Badge>
-                  <span className="text-foreground/80">
-                    {daysLeft(active.endsAt)} хоног үлдсэн
+            <dd className="mt-1 space-y-1.5 text-sm">
+              {actives.length > 0 ? (
+                actives.map((sub) => (
+                  <span
+                    key={sub.id}
+                    className="flex flex-wrap items-center gap-2"
+                  >
+                    <Badge tone="success">{sub.plan.name}</Badge>
+                    <span className="text-foreground/80">
+                      {daysLeft(sub.endsAt)} хоног үлдсэн
+                    </span>
                   </span>
-                </span>
+                ))
               ) : (
                 <Badge tone="danger">Идэвхгүй</Badge>
               )}
@@ -221,7 +226,7 @@ function AccountContent() {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <ButtonLink href="/plans" variant="primary">
-          {active ? "Эрх сунгах" : "Багц идэвхжүүлэх"}
+          {actives.length > 0 ? "Эрх сунгах" : "Багц идэвхжүүлэх"}
         </ButtonLink>
         <ButtonLink href="/forgot" variant="outline">
           Нууц үг солих

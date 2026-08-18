@@ -13,16 +13,21 @@ import { useAuth } from "./auth-context";
 import type { Subscription } from "./types";
 
 interface SubscriptionContextValue {
-  /** True while the signed-in user holds an unexpired subscription. */
+  /** True while the signed-in user holds any unexpired subscription. */
   hasActiveSub: boolean;
-  subscription: Subscription | null;
+  /** True when one of those subscriptions covers the FULL catalog
+   *  (plan.genreSlugs empty — «Plus» or a grandfathered old plan). */
+  hasFullAccessSub: boolean;
+  /** All unexpired subscriptions — category plans can run in parallel. */
+  subscriptions: Subscription[];
   loading: boolean;
   refresh: () => Promise<void>;
 }
 
 const FALLBACK: SubscriptionContextValue = {
   hasActiveSub: false,
-  subscription: null,
+  hasFullAccessSub: false,
+  subscriptions: [],
   loading: false,
   refresh: async () => undefined,
 };
@@ -33,11 +38,11 @@ const SubscriptionContext = createContext<SubscriptionContextValue | undefined>(
 
 // Survives page navigations (each page mounts its own provider): the last
 // known answer renders immediately while a silent refresh runs behind it.
-let subCache: { token: string; value: Subscription | null } | null = null;
+let subCache: { token: string; value: Subscription[] } | null = null;
 
 /**
  * App-wide "does this user have an active plan" state. Poster cards use it
- * to hide rental price tags that don't apply to subscribers.
+ * to hide rental price tags that don't apply to full-access subscribers.
  */
 export function SubscriptionProvider({
   children,
@@ -45,8 +50,8 @@ export function SubscriptionProvider({
   children: React.ReactNode;
 }) {
   const { token } = useAuth();
-  const [subscription, setSubscription] = useState<Subscription | null>(() =>
-    subCache && subCache.token === token ? subCache.value : null,
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>(() =>
+    subCache && subCache.token === token ? subCache.value : [],
   );
   const [loading, setLoading] = useState(
     () => !(subCache && subCache.token === token),
@@ -55,16 +60,16 @@ export function SubscriptionProvider({
   const load = useCallback(async () => {
     if (!token) {
       subCache = null;
-      setSubscription(null);
+      setSubscriptions([]);
       setLoading(false);
       return;
     }
     try {
       const res = await billingApi.me(token);
-      subCache = { token, value: res.active };
-      setSubscription(res.active);
+      subCache = { token, value: res.actives };
+      setSubscriptions(res.actives);
     } catch {
-      setSubscription(null);
+      setSubscriptions([]);
     } finally {
       setLoading(false);
     }
@@ -76,12 +81,15 @@ export function SubscriptionProvider({
 
   const value = useMemo(
     () => ({
-      hasActiveSub: Boolean(subscription),
-      subscription,
+      hasActiveSub: subscriptions.length > 0,
+      hasFullAccessSub: subscriptions.some(
+        (s) => (s.plan.genreSlugs?.length ?? 0) === 0,
+      ),
+      subscriptions,
       loading,
       refresh: load,
     }),
-    [subscription, loading, load],
+    [subscriptions, loading, load],
   );
 
   return (

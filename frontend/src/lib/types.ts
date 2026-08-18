@@ -85,6 +85,8 @@ export interface ChapterSummary {
   id: string;
   number: number;
   title: string;
+  /** Set when the chapter carries an audio/video file. */
+  mediaMimeType?: string | null;
   createdAt: string;
 }
 
@@ -95,6 +97,9 @@ export interface AdminChapter {
   number: number;
   title: string;
   body: string;
+  mediaUrl: string | null;
+  mediaR2Key: string | null;
+  mediaMimeType: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -105,6 +110,9 @@ export interface ChapterDetail {
   number: number;
   title: string;
   body: string;
+  /** Signed playback URL when the chapter has audio/video. */
+  mediaUrl: string | null;
+  mediaMimeType: string | null;
   contentId: string;
   isFree: boolean;
   content: { title: string; slug: string };
@@ -138,6 +146,8 @@ export interface Content {
   subscriptionIncluded: boolean;
   /** NOVEL only: the first N chapters are readable without a subscription. */
   freeChapterCount: number;
+  /** NOVEL only: single-chapter story (one inline chapter, no chapter list). */
+  singleChapter: boolean;
   genres: Array<{ genre: Genre }>;
   createdAt: string;
   updatedAt: string;
@@ -198,6 +208,8 @@ export interface Plan {
   price: number;
   durationDay: number;
   maxDevices: number;
+  /** Genre slugs this plan unlocks; empty = the full catalog ("Plus"). */
+  genreSlugs: string[];
   active: boolean;
 }
 
@@ -210,7 +222,8 @@ export interface Subscription {
 }
 
 export interface MySubscription {
-  active: Subscription | null;
+  /** All unexpired subscriptions — category plans can run in parallel. */
+  actives: Subscription[];
   history: Subscription[];
 }
 

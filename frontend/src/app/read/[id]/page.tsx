@@ -29,7 +29,7 @@ function Reader() {
   const [fetched, setFetched] = useState<{
     chapterId: string;
     chapter: ChapterDetail | null;
-    error: "subscription" | "generic" | null;
+    error: "subscription" | "rental" | "generic" | null;
   } | null>(null);
   const completedSent = useRef<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -113,7 +113,9 @@ function Reader() {
           error:
             err instanceof ApiError && err.code === "SUBSCRIPTION_REQUIRED"
               ? "subscription"
-              : "generic",
+              : err instanceof ApiError && err.code === "RENTAL_REQUIRED"
+                ? "rental"
+                : "generic",
         });
       });
     return () => {
@@ -185,7 +187,7 @@ function Reader() {
     return (
       <Shell>
         <div className="max-w-md text-center">
-          <p className="text-muted">Энэ бичвэрт бүлэг хараахан ороогүй байна.</p>
+          <p className="text-muted">Энэ өгүүллэгт бүлэг хараахан ороогүй байна.</p>
           <Button
             variant="outline"
             className="mt-4"
@@ -223,6 +225,36 @@ function Reader() {
     );
   }
 
+  if (error === "rental") {
+    return (
+      <Shell>
+        <div className="max-w-md text-center">
+          <p className="display text-2xl font-semibold text-foreground">
+            Түрээслэх шаардлагатай
+          </p>
+          <p className="mt-3 text-sm leading-relaxed text-muted">
+            {detail && detail.freeChapterCount > 0
+              ? `Эхний ${detail.freeChapterCount} бүлэг үнэгүй. Үргэлжлүүлэхийн тулд өгүүллэгийг түрээслэнэ үү.`
+              : "Энэ бүлгийг нээхийн тулд өгүүллэгийг түрээслэнэ үү."}
+            {access?.rentalPrice != null
+              ? ` Үнэ: ${access.rentalPrice.toLocaleString()}₮ (${access.rentalDurationHours} цаг).`
+              : ""}
+          </p>
+          <div className="mt-6 flex items-center justify-center gap-3">
+            {detail ? (
+              <ButtonLink href={`/title/${detail.slug}`} variant="accent" size="lg">
+                Түрээслэх
+              </ButtonLink>
+            ) : null}
+            <Button variant="outline" size="lg" onClick={() => router.back()}>
+              Буцах
+            </Button>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
   if (error === "generic") {
     return (
       <Shell>
@@ -248,9 +280,11 @@ function Reader() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    // svh (not vh): iOS Safari's dynamic toolbars make 100vh overshoot the
+    // visible area, leaving a phantom gap at the bottom of the reader.
+    <div className="min-h-svh bg-background pb-[env(safe-area-inset-bottom)]">
       {/* Top bar */}
-      <header className="sticky top-0 z-40 border-b border-line bg-background/90 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-line bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-5 py-3">
           <button
             type="button"
@@ -276,10 +310,34 @@ function Reader() {
 
       {/* Body */}
       <main className="mx-auto max-w-2xl px-5 pb-24 pt-10">
-        <h1 className="display text-2xl font-semibold text-foreground sm:text-3xl">
-          Бүлэг {chapter.number}
-        </h1>
-        <p className="mt-1 text-base text-muted">{chapter.title}</p>
+        {/* Single-chapter stories: the chapter mirrors the content title, so a
+            "Бүлэг 1" heading is just noise. */}
+        {detail?.singleChapter ? (
+          <h1 className="display text-2xl font-semibold text-foreground sm:text-3xl">
+            {chapter.content.title}
+          </h1>
+        ) : (
+          <>
+            <h1 className="display text-2xl font-semibold text-foreground sm:text-3xl">
+              Бүлэг {chapter.number}
+            </h1>
+            <p className="mt-1 text-base text-muted">{chapter.title}</p>
+          </>
+        )}
+
+        {/* Chapter video (audio stories are uploaded as video files).
+            Fixed 16:9 box: without it, low-resolution files render at their
+            tiny intrinsic size on phones. */}
+        {chapter.mediaUrl ? (
+          <video
+            key={chapter.id}
+            src={chapter.mediaUrl}
+            controls
+            playsInline
+            controlsList="nodownload"
+            className="mt-6 aspect-video w-full rounded-lg border border-line bg-black object-contain"
+          />
+        ) : null}
 
         <article className="mt-8 space-y-5">
           {paragraphs.map((p, i) => (
@@ -293,7 +351,8 @@ function Reader() {
         </article>
         <div ref={endRef} aria-hidden className="h-px" />
 
-        {/* Chapter navigation */}
+        {/* Chapter navigation — pointless on single-chapter stories */}
+        {(detail?.chapters.length ?? 0) <= 1 ? null : (
         <nav className="mt-12 border-t border-line pt-6">
           {chapterOptions.length > 1 ? (
             <Select
@@ -330,6 +389,7 @@ function Reader() {
             )}
           </div>
         </nav>
+        )}
       </main>
     </div>
   );
@@ -337,7 +397,7 @@ function Reader() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-5">
+    <div className="flex min-h-svh items-center justify-center bg-background px-5">
       {children}
     </div>
   );

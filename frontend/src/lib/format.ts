@@ -1,12 +1,12 @@
 import type { ContentType } from "./types";
 
-/** Content-type badge label: MOVIE → "Кино", SERIES → "Цуврал", NOVEL → "Бичвэр". */
+/** Content-type badge label: MOVIE → "Кино", SERIES → "Цуврал", NOVEL → "Өгүүллэг". */
 export function typeLabel(type: ContentType): string {
   switch (type) {
     case "SERIES":
       return "Цуврал";
     case "NOVEL":
-      return "Бичвэр";
+      return "Өгүүллэг";
     default:
       return "Кино";
   }

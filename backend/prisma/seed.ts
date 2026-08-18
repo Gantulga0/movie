@@ -3,13 +3,31 @@ import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-/** Subscription plans: 1/3/6/12 months. Prices in MNT. */
+/**
+ * Subscription plans: all 30-day, scoped by genre slugs.
+ * Empty genreSlugs = full catalog ("Plus"). Keep each genreSlugs array in
+ * canonical (sorted) order — subscription stacking compares scopes with
+ * Prisma's order-sensitive list `equals`.
+ */
 const PLANS = [
-  { name: '1 сар', price: 8000, durationDay: 30 },
-  { name: '3 сар', price: 20000, durationDay: 90 },
-  { name: '6 сар', price: 50000, durationDay: 180 },
-  { name: '12 сар', price: 100000, durationDay: 365 },
+  { name: 'Plus', price: 20000, durationDay: 30, genreSlugs: [] as string[] },
+  { name: '+18 Кино цуврал', price: 13000, durationDay: 30, genreSlugs: ['adult'] },
+  {
+    name: '+18 Сонсдог өгүүллэг',
+    price: 9900,
+    durationDay: 30,
+    genreSlugs: ['sonsdog-oguulleg'],
+  },
+  {
+    name: '+18 Уншдаг өгүүллэг',
+    price: 7700,
+    durationDay: 30,
+    genreSlugs: ['nereee-nuutsalsan-zahidal', 'unshdag-oguulleg'],
+  },
 ];
+
+/** Retired duration-only plans — deactivated so they can't be purchased. */
+const RETIRED_PLAN_NAMES = ['1 сар', '3 сар', '6 сар', '12 сар'];
 
 const GENRES = [
   { name: 'Адал явдалт', slug: 'adventure', types: [ContentType.MOVIE, ContentType.SERIES] },
@@ -26,16 +44,17 @@ const GENRES = [
   { name: 'Баримтат', slug: 'documentary', types: [ContentType.MOVIE, ContentType.SERIES] },
   { name: 'Гэр бүлийн', slug: 'family', types: [ContentType.MOVIE, ContentType.SERIES] },
   { name: '+18', slug: 'adult', types: [ContentType.MOVIE, ContentType.SERIES] },
-  { name: 'Уншдаг өгүүллэг', slug: 'unshdag-oguulleg', types: [ContentType.NOVEL] },
-  { name: 'Сонсдог өгүүллэг', slug: 'sonsdog-oguulleg', types: [ContentType.NOVEL] },
-  { name: '+18 Монгол', slug: '18-mongol', types: [ContentType.NOVEL] },
-  { name: '+18 гадаад', slug: '18-gadaad', types: [ContentType.NOVEL] },
+  { name: '+18 Уншдаг өгүүллэг', slug: 'unshdag-oguulleg', types: [ContentType.NOVEL] },
+  { name: '+18 Сонсдог өгүүллэг', slug: 'sonsdog-oguulleg', types: [ContentType.NOVEL] },
   {
     name: 'Нэрээ нууцалсан захидал',
     slug: 'nereee-nuutsalsan-zahidal',
     types: [ContentType.NOVEL],
   },
 ];
+
+/** Old novel genres merged into the three above — removed (with links) on seed. */
+const REMOVED_GENRE_SLUGS = ['18-mongol', '18-gadaad'];
 
 async function main() {
   // ---- Admin -------------------------------------------------------------
@@ -74,6 +93,13 @@ async function main() {
     }
   }
 
+  // Old duration-only plans stop being purchasable; existing subscriptions
+  // on them keep working until they expire.
+  await prisma.plan.updateMany({
+    where: { name: { in: RETIRED_PLAN_NAMES }, active: true },
+    data: { active: false },
+  });
+
   // ---- Genres --------------------------------------------------------------
   for (const genre of GENRES) {
     await prisma.genre.upsert({
@@ -81,6 +107,18 @@ async function main() {
       update: { name: genre.name, types: genre.types },
       create: genre,
     });
+  }
+
+  // Retired novel genres: drop their content links first, then the genres.
+  await prisma.contentGenre.deleteMany({
+    where: { genre: { slug: { in: REMOVED_GENRE_SLUGS } } },
+  });
+  const removedGenres = await prisma.genre.deleteMany({
+    where: { slug: { in: REMOVED_GENRE_SLUGS } },
+  });
+  if (removedGenres.count > 0) {
+    // eslint-disable-next-line no-console
+    console.log(`Removed ${removedGenres.count} retired genres (${REMOVED_GENRE_SLUGS.join(', ')})`);
   }
   // eslint-disable-next-line no-console
   console.log(

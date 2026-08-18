@@ -21,7 +21,7 @@ interface ContentCardProps {
  */
 export function ContentCard({ content, progressPercent }: ContentCardProps) {
   const { openDetails } = useDetails();
-  const { hasActiveSub, loading: subLoading } = useSubscription();
+  const { hasFullAccessSub, loading: subLoading } = useSubscription();
 
   const full = "genres" in content ? content : null;
   const genreNames = full
@@ -29,14 +29,17 @@ export function ContentCard({ content, progressPercent }: ContentCardProps) {
     : [];
 
   // Rental price tag: shown on rentable titles, except when the viewer's
-  // plan already covers this title. Rental-only titles keep their tag even
-  // for subscribers — they still pay per view. Waits for the subscription
-  // check so subscribers never see the tag flash on refresh.
+  // plan already covers this title. Card payloads carry no genres, so only a
+  // FULL-access plan can safely hide the tag — category-plan holders keep
+  // seeing it (a redundant tag beats a hidden price). Rental-only titles
+  // keep their tag even for subscribers — they still pay per view. Waits for
+  // the subscription check so subscribers never see the tag flash on refresh.
   const rentalPrice =
     content.isRentable && content.rentalPrice != null
       ? content.rentalPrice
       : null;
-  const coveredByPlan = hasActiveSub && content.subscriptionIncluded !== false;
+  const coveredByPlan =
+    hasFullAccessSub && content.subscriptionIncluded !== false;
   const showPrice = !subLoading && rentalPrice != null && !coveredByPlan;
 
   const metaLine = [

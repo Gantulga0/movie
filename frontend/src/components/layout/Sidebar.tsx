@@ -44,7 +44,7 @@ const MAIN_ITEMS: NavItem[] = [
   },
   {
     href: "/browse?type=NOVEL",
-    label: "Бичвэр",
+    label: "Өгүүллэг",
     icon: IconBook,
     query: { key: "type", value: "NOVEL" },
   },

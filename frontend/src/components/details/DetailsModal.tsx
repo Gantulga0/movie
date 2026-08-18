@@ -222,7 +222,7 @@ export function DetailsModal({
           <div className="max-h-[85vh] overflow-y-auto">
             {/* Backdrop / trailer stage */}
             <div className="relative aspect-video max-h-[46vh] w-full overflow-hidden bg-background-deep">
-              {trailerOpen && content.trailerUrl ? (
+              {trailerOpen && content.trailerUrl && !isNovel ? (
                 <TrailerEmbed url={content.trailerUrl} title={content.title} />
               ) : (
                 <>
@@ -278,11 +278,6 @@ export function DetailsModal({
                   </span>
                 ) : null}
                 <Badge>{typeLabel(content.type)}</Badge>
-                {content.ageRating ? (
-                  <span className="rounded border border-line-strong px-1.5 py-0.5 text-xs text-foreground/80">
-                    {content.ageRating}
-                  </span>
-                ) : null}
                 {!isSeries && content.durationSec ? (
                   <span className="text-muted">
                     {formatDuration(content.durationSec)}
@@ -344,6 +339,7 @@ export function DetailsModal({
               {showAccessOptions && access ? (
                 <AccessOptions
                   access={access}
+                  genreSlugs={content.genres.map((g) => g.genre.slug)}
                   renting={renting}
                   onRent={startRent}
                 />
@@ -376,7 +372,7 @@ export function DetailsModal({
                   </span>
                 ) : null}
 
-                {content.trailerUrl ? (
+                {content.trailerUrl && !isNovel ? (
                   <Button
                     variant="outline"
                     size="lg"

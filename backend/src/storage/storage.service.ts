@@ -6,14 +6,15 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomBytes } from 'crypto';
-import { mkdir, writeFile } from 'fs/promises';
-import { extname, join, resolve } from 'path';
+import { mkdir, unlink, writeFile } from 'fs/promises';
+import { extname, join, normalize, resolve, sep } from 'path';
 
 export interface UploadResult {
   key: string;
@@ -190,6 +191,58 @@ export class StorageService {
       new GetObjectCommand({ Bucket: this.bucketForKey(key), Key: key }),
       { expiresIn },
     );
+  }
+
+  /**
+   * Recover a storage key from a stored URL: `${R2_PUBLIC_URL}/<key>` (public
+   * images) or `/uploads/<key>` (local mode). External URLs (YouTube trailers
+   * etc.) return null and are never touched.
+   */
+  keyFromUrl(url: string | null | undefined): string | null {
+    if (!url) return null;
+    if (this.publicUrl && url.startsWith(`${this.publicUrl}/`)) {
+      return url.slice(this.publicUrl.length + 1);
+    }
+    if (url.startsWith('/uploads/')) {
+      return url.slice('/uploads/'.length);
+    }
+    return null;
+  }
+
+  /**
+   * Best-effort delete of stored objects (R2) or local files. Never throws —
+   * a failed cleanup must not fail the request that triggered it.
+   */
+  async deleteObjects(keys: Array<string | null | undefined>): Promise<void> {
+    const unique = [...new Set(keys.filter((k): k is string => Boolean(k)))];
+    await Promise.allSettled(unique.map((key) => this.deleteObject(key)));
+  }
+
+  private async deleteObject(key: string): Promise<void> {
+    try {
+      if (this.r2Configured) {
+        await this.getClient().send(
+          new DeleteObjectCommand({ Bucket: this.bucketForKey(key), Key: key }),
+        );
+        this.logger.log(`Deleted R2 object: ${key}`);
+        return;
+      }
+      // Local mode: the key is a path under the uploads root. Reject anything
+      // that would escape it (absolute paths, `..` traversal).
+      const root = resolve(localUploadRoot());
+      const target = resolve(root, normalize(key));
+      if (target !== root && !target.startsWith(root + sep)) {
+        this.logger.warn(`Refusing to delete outside uploads root: ${key}`);
+        return;
+      }
+      await unlink(target);
+      this.logger.log(`Deleted local upload: ${key}`);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException)?.code;
+      if (code !== 'ENOENT') {
+        this.logger.warn(`Failed to delete stored object ${key}: ${String(err)}`);
+      }
+    }
   }
 
   /** Direct-to-R2 upload URL for large files. R2 mode only. */

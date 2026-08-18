@@ -53,19 +53,24 @@ export class BillingService {
   // ----------------------------------------------------------------- plans
 
   listPlans() {
+    // Price-descending puts the full-catalog "Plus" plan first.
     return this.prisma.plan.findMany({
       where: { active: true },
-      orderBy: { durationDay: 'asc' },
+      orderBy: { price: 'desc' },
     });
   }
 
   // ---------------------------------------------------------- subscription
 
-  /** The caller's current access state, shown on the account/plans screens. */
+  /**
+   * The caller's current access state, shown on the account/plans screens.
+   * Category-scoped plans mean several subscriptions can be active at once
+   * (e.g. «+18 Кино цуврал» + «+18 Уншдаг өгүүллэг»).
+   */
   async mySubscription(userId: string) {
     const now = new Date();
-    const [active, history] = await Promise.all([
-      this.prisma.subscription.findFirst({
+    const [actives, history] = await Promise.all([
+      this.prisma.subscription.findMany({
         where: {
           userId,
           status: SubscriptionStatus.ACTIVE,
@@ -81,18 +86,7 @@ export class BillingService {
         take: 20,
       }),
     ]);
-    return { active, history };
-  }
-
-  async hasActive(userId: string): Promise<boolean> {
-    const sub = await this.prisma.subscription.findFirst({
-      where: {
-        userId,
-        status: SubscriptionStatus.ACTIVE,
-        endsAt: { gt: new Date() },
-      },
-    });
-    return Boolean(sub);
+    return { actives, history };
   }
 
   // ---------------------------------------------------------------- rentals
@@ -399,7 +393,12 @@ export class BillingService {
     );
   }
 
-  /** New time stacks on top of any remaining active time. */
+  /**
+   * New time stacks on top of remaining active time — but only within the
+   * SAME plan scope (genreSlugs). Buying «Plus» on top of an old full-access
+   * plan extends it; buying a category plan while holding «Plus» starts a
+   * parallel subscription instead of burning overlapping days.
+   */
   private async createOrExtendSubscriptionTx(
     tx: Parameters<Parameters<PrismaService['$transaction']>[0]>[0],
     userId: string,
@@ -407,8 +406,18 @@ export class BillingService {
     durationDay: number
   ) {
     const now = new Date();
+    const plan = await tx.plan.findUnique({
+      where: { id: planId },
+      select: { genreSlugs: true },
+    });
     const current = await tx.subscription.findFirst({
-      where: { userId, status: SubscriptionStatus.ACTIVE, endsAt: { gt: now } },
+      where: {
+        userId,
+        status: SubscriptionStatus.ACTIVE,
+        endsAt: { gt: now },
+        // Same coverage scope (order-sensitive — seed keeps arrays canonical).
+        plan: { genreSlugs: { equals: plan?.genreSlugs ?? [] } },
+      },
       orderBy: { endsAt: 'desc' },
     });
 

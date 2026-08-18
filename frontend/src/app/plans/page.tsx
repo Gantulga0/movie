@@ -90,31 +90,13 @@ function PlansContent() {
     }
   }
 
-  const active = mine?.active ?? null;
+  const actives = mine?.actives ?? [];
 
-  // "Тест …" plans (1₮ payment-flow checks) stay out of the pricing math so
-  // they can't skew the per-month baseline or steal the best-value badge.
-  const pricedPlans = plans.filter((p) => !p.name.startsWith("Тест"));
-
-  // Per-month framing: everything is compared against the shortest plan.
-  const monthsOf = (p: Plan) => Math.max(1, Math.round(p.durationDay / 30));
-  const perMonthOf = (p: Plan) => Math.round(p.price / monthsOf(p));
-  const basePerMonth =
-    pricedPlans.length > 0
-      ? perMonthOf(
-          pricedPlans.reduce((a, b) => (a.durationDay <= b.durationDay ? a : b)),
-        )
-      : 0;
-  // "Best value" = the cheapest month; on a tie the longer plan wins.
+  // The full-catalog plan («Plus» — empty genreSlugs) gets the highlight.
+  // "Тест …" plans (1₮ payment-flow checks) never take the badge.
   const bestId =
-    pricedPlans.length > 1
-      ? pricedPlans.reduce((a, b) =>
-          perMonthOf(b) < perMonthOf(a) ||
-          (perMonthOf(b) === perMonthOf(a) && b.durationDay > a.durationDay)
-            ? b
-            : a,
-        ).id
-      : null;
+    plans.find((p) => p.genreSlugs.length === 0 && !p.name.startsWith("Тест"))
+      ?.id ?? null;
 
   return (
     <div className="relative mx-auto max-w-6xl px-5 py-12 sm:px-10">
@@ -139,27 +121,34 @@ function PlansContent() {
         </h1>
       </header>
 
-      {/* Current membership strip */}
-      {active ? (
-        <div className="mx-auto mt-9 flex max-w-xl items-center gap-4 rounded-2xl border border-accent/25 bg-accent/[.07] px-5 py-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/infinity.png"
-            alt=""
-            className="h-8 w-auto shrink-0 opacity-90"
-          />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold text-foreground">
-              Идэвхтэй: {active.plan.name}
-            </p>
-            <p className="mt-0.5 text-xs text-muted">
-              {formatDate(active.endsAt)} хүртэл —{" "}
-              <span className="font-semibold text-accent">
-                {daysLeft(active.endsAt)} хоног үлдсэн
-              </span>
-            </p>
-          </div>
-          <Badge tone="success">Идэвхтэй</Badge>
+      {/* Current membership strip — category plans can run in parallel */}
+      {actives.length > 0 ? (
+        <div className="mx-auto mt-9 max-w-xl space-y-3">
+          {actives.map((sub) => (
+            <div
+              key={sub.id}
+              className="flex items-center gap-4 rounded-2xl border border-accent/25 bg-accent/[.07] px-5 py-4"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/infinity.png"
+                alt=""
+                className="h-8 w-auto shrink-0 opacity-90"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-foreground">
+                  Идэвхтэй: {sub.plan.name}
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {formatDate(sub.endsAt)} хүртэл —{" "}
+                  <span className="font-semibold text-accent">
+                    {daysLeft(sub.endsAt)} хоног үлдсэн
+                  </span>
+                </p>
+              </div>
+              <Badge tone="success">Идэвхтэй</Badge>
+            </div>
+          ))}
         </div>
       ) : null}
 
@@ -182,11 +171,8 @@ function PlansContent() {
             <PlanCard
               key={plan.id}
               plan={plan}
-              months={monthsOf(plan)}
-              perMonth={perMonthOf(plan)}
-              basePerMonth={plan.name.startsWith("Тест") ? 0 : basePerMonth}
               isBest={plan.id === bestId}
-              renewing={Boolean(active)}
+              renewing={actives.some((s) => s.plan.id === plan.id)}
               busy={paying !== null}
               loading={paying === plan.id}
               delayMs={i * 70}
@@ -270,11 +256,16 @@ function PlansContent() {
   );
 }
 
+/** Display names for the category slugs a plan can unlock. */
+const CATEGORY_LABELS: Record<string, string> = {
+  adult: "+18 кино, цуврал",
+  "sonsdog-oguulleg": "+18 Сонсдог өгүүллэг",
+  "unshdag-oguulleg": "+18 Уншдаг өгүүллэг",
+  "nereee-nuutsalsan-zahidal": "Нэрээ нууцалсан захидал",
+};
+
 function PlanCard({
   plan,
-  months,
-  perMonth,
-  basePerMonth,
   isBest,
   renewing,
   busy,
@@ -283,9 +274,6 @@ function PlanCard({
   onSelect,
 }: {
   plan: Plan;
-  months: number;
-  perMonth: number;
-  basePerMonth: number;
   isBest: boolean;
   renewing: boolean;
   busy: boolean;
@@ -293,8 +281,7 @@ function PlanCard({
   delayMs: number;
   onSelect: () => void;
 }) {
-  const savings =
-    basePerMonth > 0 ? Math.round((1 - perMonth / basePerMonth) * 100) : 0;
+  const fullAccess = plan.genreSlugs.length === 0;
 
   const inner = (
     <div
@@ -302,33 +289,35 @@ function PlanCard({
         isBest ? "rounded-[calc(1.5rem-1px)] bg-surface" : ""
       }`}
     >
-      <div className="flex items-center justify-between">
-        <p className="display text-xl font-semibold text-foreground">
-          {plan.name}
-        </p>
-        {savings >= 5 ? (
-          <span className="rounded-full bg-teal/15 px-2 py-0.5 text-[11px] font-bold tabular-nums text-teal">
-            −{savings}%
-          </span>
-        ) : null}
-      </div>
+      <p className="display text-xl font-semibold text-foreground">
+        {plan.name}
+      </p>
 
       <p className="mt-4 flex items-baseline gap-1">
         <span className="display text-4xl font-bold tabular-nums text-foreground">
-          {formatMnt(perMonth)}
+          {formatMnt(plan.price)}
         </span>
         <span className="text-sm font-medium text-muted">/ сар</span>
       </p>
       <p className="mt-1 text-xs tabular-nums text-muted">
-        {months > 1
-          ? `Нийт ${formatMnt(plan.price)} • ${plan.durationDay} хоног`
-          : `${plan.durationDay} хоногийн эрх`}
+        {plan.durationDay} хоногийн эрх
       </p>
 
       <div className="my-5 h-px bg-line" aria-hidden />
 
       <ul className="space-y-2.5 text-[13px] text-foreground/80">
-        <PlanFeature>Бүх кино, цуврал, анимэ</PlanFeature>
+        {fullAccess ? (
+          <>
+            <PlanFeature>Бүх кино, цуврал, анимэ</PlanFeature>
+            <PlanFeature>Бүх өгүүллэг</PlanFeature>
+          </>
+        ) : (
+          plan.genreSlugs.map((slug) => (
+            <PlanFeature key={slug}>
+              {CATEGORY_LABELS[slug] ?? slug}
+            </PlanFeature>
+          ))
+        )}
         <PlanFeature>HD чанараар үзэх</PlanFeature>
         <PlanFeature>{plan.maxDevices} төхөөрөмж дээр нэвтрэх</PlanFeature>
       </ul>
@@ -355,7 +344,7 @@ function PlanCard({
       {isBest ? (
         <>
           <span className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-accent-strong px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white shadow-[0_2px_16px_rgba(93,110,245,0.5)]">
-            Хамгийн ашигтай
+            Бүгдийг багтаасан
           </span>
           <div className="h-full rounded-3xl bg-gradient-to-b from-accent via-accent/35 to-accent/10 p-px shadow-[0_8px_40px_rgba(93,110,245,0.25)] transition duration-200 hover:-translate-y-1">
             {inner}

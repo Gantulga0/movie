@@ -10,6 +10,8 @@ import { formatHours, formatMnt } from "@/lib/format";
 interface AccessOptionsProps {
   /** Entitlement snapshot for the open title (must be loaded). */
   access: ContentAccess;
+  /** The title's genre slugs — pick the cheapest plan that COVERS it. */
+  genreSlugs?: string[];
   renting: boolean;
   onRent: () => void;
 }
@@ -19,23 +21,38 @@ interface AccessOptionsProps {
  * a one-time ticket (gold stub) or the monthly pass (indigo membership).
  * Renders nothing when neither option applies.
  */
-export function AccessOptions({ access, renting, onRent }: AccessOptionsProps) {
+export function AccessOptions({
+  access,
+  genreSlugs = [],
+  renting,
+  onRent,
+}: AccessOptionsProps) {
   const rentOption = access.isRentable && access.rentalPrice != null;
   const subOption = access.subscriptionIncluded;
 
-  // "From" price for the pass card — cheapest active plan.
+  // "From" price for the pass card — the cheapest plan that unlocks THIS
+  // title: full-catalog plans always qualify, category plans only when
+  // their scope overlaps the title's genres. Тест plans never advertised.
+  const slugsKey = genreSlugs.join(",");
   const [cheapest, setCheapest] = useState<Plan | null>(null);
   useEffect(() => {
     if (!subOption) return;
+    const slugs = slugsKey ? slugsKey.split(",") : [];
     billingApi
       .plans()
       .then((plans) => {
-        const active = plans.filter((p) => p.active);
-        active.sort((a, b) => a.price - b.price);
-        setCheapest(active[0] ?? null);
+        const covering = plans.filter(
+          (p) =>
+            p.active &&
+            !p.name.startsWith("Тест") &&
+            (p.genreSlugs.length === 0 ||
+              p.genreSlugs.some((s) => slugs.includes(s))),
+        );
+        covering.sort((a, b) => a.price - b.price);
+        setCheapest(covering[0] ?? null);
       })
       .catch(() => setCheapest(null));
-  }, [subOption]);
+  }, [subOption, slugsKey]);
 
   if (!rentOption && !subOption) return null;
 
@@ -161,7 +178,9 @@ function SubscriptionPassCard({
         )}
       </p>
       <p className="mt-1.5 text-xs leading-relaxed text-muted">
-        Багцад орсон бүх кино, цувралыг хязгааргүй үзнэ.
+        {cheapest && cheapest.genreSlugs.length > 0
+          ? `«${cheapest.name}» багц энэ контентыг нээнэ.`
+          : "Багцад орсон бүх контентыг хязгааргүй үзнэ."}
       </p>
 
       <div className="mt-auto pt-4" />

@@ -5,14 +5,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Role, SubscriptionStatus } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { activePlanScopes, scopesCover } from '../subscription-access';
 
 /**
  * Playback gate: a title streams when the caller has a live subscription
- * (and the title is included in it) OR an active one-time rental. Admins
- * bypass the check so they can preview content. Must run after JwtAuthGuard
- * on a route whose ':id' param is the content id.
+ * whose plan covers the title's genres (full-catalog plans cover everything)
+ * OR an active one-time rental. Admins bypass the check so they can preview
+ * content. Must run after JwtAuthGuard on a route whose ':id' param is the
+ * content id.
  */
 @Injectable()
 export class EntitlementGuard implements CanActivate {
@@ -31,7 +33,11 @@ export class EntitlementGuard implements CanActivate {
     const contentId: string = request.params.id;
     const content = await this.prisma.content.findUnique({
       where: { id: contentId },
-      select: { subscriptionIncluded: true, isRentable: true },
+      select: {
+        subscriptionIncluded: true,
+        isRentable: true,
+        genres: { select: { genre: { select: { slug: true } } } },
+      },
     });
     if (!content) {
       throw new NotFoundException('Контент олдсонгүй');
@@ -40,14 +46,9 @@ export class EntitlementGuard implements CanActivate {
     const now = new Date();
 
     if (content.subscriptionIncluded) {
-      const subscription = await this.prisma.subscription.findFirst({
-        where: {
-          userId: user.id,
-          status: SubscriptionStatus.ACTIVE,
-          endsAt: { gt: now },
-        },
-      });
-      if (subscription) return true;
+      const scopes = await activePlanScopes(this.prisma, user.id, now);
+      const slugs = content.genres.map((g) => g.genre.slug);
+      if (scopesCover(scopes, slugs)) return true;
     }
 
     const rental = await this.prisma.rental.findFirst({

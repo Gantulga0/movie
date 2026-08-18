@@ -176,7 +176,7 @@ function HomeContent() {
 
       {novelsLoading || novels.length > 0 ? (
         <ContentRow
-          title="Бичвэр"
+          title="Өгүүллэг"
           viewAllHref="/browse?type=NOVEL"
           loading={novelsLoading}
         >
@@ -398,11 +398,6 @@ function HomeHero({
               {hero.releaseYear}
             </span>
           ) : null}
-          {hero.ageRating ? (
-            <span className="rounded border border-line-strong px-1.5 py-0.5 text-xs">
-              {hero.ageRating}
-            </span>
-          ) : null}
           {hero.genres.slice(0, 3).map((g) => (
             <span
               key={g.genre.id}
@@ -427,7 +422,7 @@ function HomeHero({
             {hero.type === "NOVEL" ? <IconBook size={18} /> : <IconPlay size={18} />}
             {hero.type === "NOVEL" ? "Унших" : "Үзэх"}
           </ButtonLink>
-          {hero.trailerUrl ? (
+          {hero.trailerUrl && hero.type !== "NOVEL" ? (
             <Button
               variant="outline"
               size="lg"

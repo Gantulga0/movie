@@ -192,7 +192,7 @@ function BrowseContent() {
             : type === "SERIES"
               ? "Бүх цуврал"
               : type === "NOVEL"
-                ? "Бүх бичвэр"
+                ? "Бүх өгүүллэг"
                 : "Бүх контент"
         }
         title="Ангилал"
@@ -216,7 +216,7 @@ function BrowseContent() {
               { value: null, label: "Бүгд" },
               { value: "MOVIE", label: "Кино" },
               { value: "SERIES", label: "Цуврал" },
-              { value: "NOVEL", label: "Бичвэр" },
+              { value: "NOVEL", label: "Өгүүллэг" },
             ].map((opt) => (
               <button
                 key={opt.label}

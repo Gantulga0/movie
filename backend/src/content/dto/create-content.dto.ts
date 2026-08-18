@@ -123,6 +123,11 @@ export class CreateContentDto {
   @Max(10_000)
   freeChapterCount?: number;
 
+  /** NOVEL only: single-chapter story (one inline chapter, no chapter list). */
+  @IsOptional()
+  @IsBoolean()
+  singleChapter?: boolean;
+
   /** Genre names; unknown ones are created on the fly. */
   @IsOptional()
   @IsArray()

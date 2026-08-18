@@ -22,6 +22,7 @@ export interface ContentFormValues {
   genres: string[];
   // Novel settings
   freeChapterCount: string;
+  singleChapter: boolean;
   // Rental settings
   isRentable: boolean;
   rentalPrice: string;
@@ -58,14 +59,12 @@ export function toPayload(values: ContentFormValues) {
     freeChapterCount: isNovel
       ? Number(values.freeChapterCount) || 0
       : undefined,
-    // Novels are never rentable — the paywall is subscription-only.
-    isRentable: isNovel ? false : values.isRentable,
-    rentalPrice:
-      !isNovel && values.rentalPrice ? Number(values.rentalPrice) : undefined,
-    rentalDurationHours:
-      !isNovel && values.rentalDurationHours
-        ? Number(values.rentalDurationHours)
-        : undefined,
+    singleChapter: isNovel ? values.singleChapter : undefined,
+    isRentable: values.isRentable,
+    rentalPrice: values.rentalPrice ? Number(values.rentalPrice) : undefined,
+    rentalDurationHours: values.rentalDurationHours
+      ? Number(values.rentalDurationHours)
+      : undefined,
     subscriptionIncluded: values.subscriptionIncluded,
   };
 }
@@ -90,6 +89,7 @@ export function fromContent(content: ContentDetail): ContentFormValues {
     featured: content.featured,
     genres: content.genres.map((g) => g.genre.name),
     freeChapterCount: String(content.freeChapterCount ?? 0),
+    singleChapter: content.singleChapter ?? false,
     isRentable: content.isRentable,
     rentalPrice: content.rentalPrice ? String(content.rentalPrice) : "",
     rentalDurationHours: String(content.rentalDurationHours ?? 48),
@@ -114,6 +114,7 @@ export const EMPTY_FORM: ContentFormValues = {
   featured: false,
   genres: [],
   freeChapterCount: "0",
+  singleChapter: false,
   isRentable: false,
   rentalPrice: "",
   rentalDurationHours: "48",
@@ -220,9 +221,26 @@ export function ContentForm({
           >
             <option value="MOVIE">Кино</option>
             <option value="SERIES">Цуврал</option>
-            <option value="NOVEL">Бичвэр</option>
+            <option value="NOVEL">Өгүүллэг</option>
           </select>
         </div>
+
+        {values.type === "NOVEL" ? (
+          <div>
+            <label htmlFor="cf-single-chapter" className={label}>
+              Бүлгийн бүтэц
+            </label>
+            <select
+              id="cf-single-chapter"
+              className={input}
+              value={values.singleChapter ? "single" : "multi"}
+              onChange={(e) => set("singleChapter", e.target.value === "single")}
+            >
+              <option value="multi">Олон бүлэгтэй</option>
+              <option value="single">Нэг бүлэгтэй</option>
+            </select>
+          </div>
+        ) : null}
 
         <div>
           <label htmlFor="cf-status" className={label}>
@@ -381,7 +399,7 @@ export function ContentForm({
 
         {/* Genres */}
         <div className="sm:col-span-2">
-          <p className={label}>Ангилал</p>
+          <p className={label}>Ангилал *</p>
           <div className="flex flex-wrap gap-2">
             {allGenres.map((g) => {
               const on = values.genres.includes(g.name);
@@ -402,6 +420,11 @@ export function ContentForm({
               );
             })}
           </div>
+          {values.genres.length === 0 ? (
+            <p className="mt-2 text-xs text-gold">
+              Дор хаяж нэг ангилал сонгоно уу.
+            </p>
+          ) : null}
         </div>
 
         <label className="flex cursor-pointer items-center gap-2.5 sm:col-span-2">
@@ -434,25 +457,20 @@ export function ContentForm({
             </span>
           </label>
 
-          {values.type !== "NOVEL" ? (
-            <label className="mt-3 flex cursor-pointer items-center gap-2.5">
-              <input
-                type="checkbox"
-                checked={values.isRentable}
-                onChange={(e) => set("isRentable", e.target.checked)}
-                className="h-4 w-4 accent-(--accent)"
-              />
-              <span className="text-sm text-white/80">
-                Түрээслэх боломжтой — нэг удаагийн төлбөрөөр үзнэ
-              </span>
-            </label>
-          ) : (
-            <p className="mt-3 text-xs text-white/45">
-              Бичвэр контент түрээслэгдэхгүй
-            </p>
-          )}
+          <label className="mt-3 flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={values.isRentable}
+              onChange={(e) => set("isRentable", e.target.checked)}
+              className="h-4 w-4 accent-(--accent)"
+            />
+            <span className="text-sm text-white/80">
+              Түрээслэх боломжтой — нэг удаагийн төлбөрөөр{" "}
+              {values.type === "NOVEL" ? "уншина/сонсоно" : "үзнэ"}
+            </span>
+          </label>
 
-          {values.type !== "NOVEL" && values.isRentable ? (
+          {values.isRentable ? (
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="cf-rental-price" className={label}>
@@ -487,8 +505,7 @@ export function ContentForm({
             </div>
           ) : null}
 
-          {!values.subscriptionIncluded &&
-          (values.type === "NOVEL" || !values.isRentable) ? (
+          {!values.subscriptionIncluded && !values.isRentable ? (
             <p className="mt-3 text-xs text-gold">
               Анхаар: багцад ч багтахгүй, түрээслэгдэхгүй бол энэ контентыг хэн
               ч үзэж чадахгүй (түр хаагдсан төлөв).
@@ -502,7 +519,8 @@ export function ContentForm({
         disabled={
           submitting ||
           !values.title.trim() ||
-          (values.type !== "NOVEL" && values.isRentable && !values.rentalPrice)
+          values.genres.length === 0 ||
+          (values.isRentable && !values.rentalPrice)
         }
         className="mt-7 rounded-lg bg-brand px-7 py-3 text-base font-bold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
       >

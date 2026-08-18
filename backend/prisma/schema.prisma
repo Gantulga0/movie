@@ -145,6 +145,9 @@ model Content {
 
   // NOVEL only: the first N chapters are readable without a subscription.
   freeChapterCount Int @default(0)
+  // NOVEL only: single-chapter story — the admin edits one chapter inline
+  // instead of managing a chapter list.
+  singleChapter Boolean @default(false)
 
   genres       ContentGenre[]
   seasons      Season[]
@@ -265,12 +268,19 @@ model Subtitle {
 }
 
 // A light-novel chapter. Body is plain text; paragraphs split on blank lines.
+// Audio-story chapters may carry a media file instead of (or alongside) text,
+// so body defaults to empty — a chapter needs body text OR media.
 model Chapter {
   id        String @id @default(uuid())
   contentId String
   number    Int
   title     String
-  body      String
+  body      String @default("")
+
+  // Optional per-chapter audio/video (e.g. "Сонсдог өгүүллэг" narration).
+  mediaUrl      String?
+  mediaR2Key    String?
+  mediaMimeType String?
 
   content      Content        @relation(fields: [contentId], references: [id], onDelete: Cascade)
   watchHistory WatchHistory[]
@@ -349,6 +359,10 @@ model Plan {
   durationDay Int
   quality     VideoQuality?
   maxDevices  Int           @default(1)
+  // Genre slugs this plan unlocks; EMPTY = the full catalog ("Plus").
+  // Matched against Genre.slug as plain strings — renaming a seeded slug
+  // silently breaks plan coverage, so keep seed slugs stable.
+  genreSlugs  String[]      @default([])
   // Inactive plans stay attached to old subscriptions but can't be purchased.
   active      Boolean       @default(true)
 

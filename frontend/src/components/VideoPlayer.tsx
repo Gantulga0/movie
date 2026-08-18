@@ -68,12 +68,6 @@ function fmt(input: number): string {
 const SKIP = 15;
 const IDLE_MS = 2800;
 
-// Brand watermark geometry, as fractions of the film frame — so it looks
-// identical in windowed and fullscreen. Tune these to move / resize the logo.
-const WM_INSET_X = 0.025; // gap from the film's left edge (2.5% of width)
-const WM_INSET_Y = 0.14; // gap from the film's top edge (4.5% of height)
-const WM_SIZE = 0.075; // logo height (7.5% of film height); ↑ = bigger
-
 export function VideoPlayer({
   videoRef,
   sources,
@@ -118,9 +112,9 @@ export function VideoPlayer({
   const [muted, setMuted] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [visible, setVisible] = useState(true);
-  // Real element/native fullscreen. The container (with our logo overlay + custom
-  // controls) goes fullscreen where the element Fullscreen API works; iPhone
-  // Safari falls back to the native video player (see toggleFullscreen).
+  // Real element/native fullscreen. The container (with our custom controls)
+  // goes fullscreen where the element Fullscreen API works; iPhone Safari
+  // falls back to the native video player (see toggleFullscreen).
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [menu, setMenu] = useState<null | "quality" | "cc">(null);
   const [ccIndex, setCcIndex] = useState(-1); // -1 = off
@@ -131,57 +125,8 @@ export function VideoPlayer({
     kind: "play" | "pause";
   } | null>(null);
   const [pipActive, setPipActive] = useState(false);
-  // The actual film frame (top-left + size) inside the letterboxed <video>.
-  const [frame, setFrame] = useState({ top: 0, left: 0, w: 0, h: 0 });
 
   const source = sources[activeIndex] ?? sources[0];
-
-  const computeFrame = useCallback(() => {
-    const v = videoRef.current;
-    if (!v || !v.videoWidth || !v.videoHeight) return;
-    const cw = v.clientWidth;
-    const ch = v.clientHeight;
-    const scale = Math.min(cw / v.videoWidth, ch / v.videoHeight);
-    const w = v.videoWidth * scale;
-    const h = v.videoHeight * scale;
-    setFrame({ left: (cw - w) / 2, top: (ch - h) / 2, w, h });
-  }, [videoRef]);
-
-  useEffect(() => {
-    computeFrame();
-    const v = videoRef.current;
-
-    // Entering fullscreen — on mobile this also rotates to landscape — fires
-    // `fullscreenchange` *before* the <video> box has resized, so a synchronous
-    // read still sees the old windowed dimensions and the watermark frame
-    // collapses (logo disappears). Recompute once now and again after the
-    // browser has settled the new layout.
-    const recompute = () => {
-      computeFrame();
-      requestAnimationFrame(computeFrame);
-    };
-
-    // A ResizeObserver on the <video> is the reliable trigger: it always fires
-    // with the correct post-layout box size for every resize — fullscreen,
-    // orientation change, and window resize alike.
-    let ro: ResizeObserver | null = null;
-    if (v && typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(() => computeFrame());
-      ro.observe(v);
-    }
-
-    window.addEventListener("resize", recompute);
-    window.addEventListener("orientationchange", recompute);
-    document.addEventListener("fullscreenchange", recompute);
-    document.addEventListener("webkitfullscreenchange", recompute);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener("resize", recompute);
-      window.removeEventListener("orientationchange", recompute);
-      document.removeEventListener("fullscreenchange", recompute);
-      document.removeEventListener("webkitfullscreenchange", recompute);
-    };
-  }, [computeFrame, activeIndex, videoRef]);
 
   // Seek target applied on the next loadedmetadata (resume, or quality switch).
   const seekTargetRef = useRef<number | null>(resumeAt > 0 ? resumeAt : null);
@@ -304,8 +249,8 @@ export function VideoPlayer({
       return;
     }
 
-    // Fullscreen the CONTAINER (not the raw <video>) so our logo overlay + custom
-    // controls ride along. Desktop/Android/iPadOS support element fullscreen.
+    // Fullscreen the CONTAINER (not the raw <video>) so our custom controls
+    // ride along. Desktop/Android/iPadOS support element fullscreen.
     if (node.requestFullscreen) {
       node.requestFullscreen().catch(() => undefined);
     } else if (node.webkitRequestFullscreen) {
@@ -385,13 +330,6 @@ export function VideoPlayer({
     orientation?.lock?.("landscape")?.catch(() => undefined);
     return () => orientation?.unlock?.();
   }, [isFullscreen]);
-
-  // Recompute the watermark frame whenever fullscreen flips.
-  useEffect(() => {
-    computeFrame();
-    const raf = requestAnimationFrame(computeFrame);
-    return () => cancelAnimationFrame(raf);
-  }, [isFullscreen, computeFrame]);
 
   // Picture-in-picture state (events not typed on React's <video>).
   useEffect(() => {
@@ -571,7 +509,6 @@ export function VideoPlayer({
           setDuration(v.duration || 0);
           setVolume(v.volume);
           setMuted(v.muted);
-          computeFrame();
           const target = seekTargetRef.current;
           if (target != null && target > 0) {
             v.currentTime = Math.min(
@@ -602,39 +539,6 @@ export function VideoPlayer({
           />
         ))}
       </video>
-
-      {/* Brand watermark — pinned to the top-left of the actual film frame,
-          clear of the letterbox bars, and kept in fullscreen. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute z-30 flex select-none items-center opacity-70 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] transition-all duration-300"
-        style={{
-          // Position and size are proportional to the film frame, so the
-          // watermark looks identical in windowed and fullscreen modes.
-          left: frame.left + frame.w * WM_INSET_X,
-          top: frame.top + frame.h * WM_INSET_Y,
-          gap: Math.max(frame.h * 0.02, 8),
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/infinity.png"
-          alt=""
-          style={{
-            height: Math.min(Math.max(frame.h * WM_SIZE, 32), 96),
-            width: "auto",
-          }}
-        />
-        <span
-          className="display font-bold tracking-tight text-white"
-          style={{
-            fontSize: Math.min(Math.max(frame.h * WM_SIZE * 0.86, 26), 84),
-            lineHeight: 1,
-          }}
-        >
-          Шивнээ
-        </span>
-      </div>
 
       {/* Episode-change flash — keyed by the episode id so it replays on switch
           (and once on open), no state needed. */}
