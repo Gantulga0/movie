@@ -67,6 +67,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           The document itself never scrolls, so iOS Safari's toolbar never
           collapses and fixed bars can never lag or expose content strips. */}
       <div className="h-dvh overflow-hidden bg-background">
+      {/* viewport-fit=cover lets content scroll behind the iOS status bar —
+          keep that zone solid black so nothing ever bleeds through it. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-x-0 top-0 z-40 h-[env(safe-area-inset-top)] bg-background-deep md:hidden"
+      />
       {/* useSearchParams inside Sidebar needs a Suspense boundary. */}
       <Suspense fallback={null}>
         <Sidebar expanded={expanded} onToggle={toggle} onProfile={openProfile} />
