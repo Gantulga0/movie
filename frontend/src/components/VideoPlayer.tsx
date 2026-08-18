@@ -249,12 +249,22 @@ export function VideoPlayer({
       return;
     }
 
+    // Rotate to landscape right inside the tap's gesture context — deferring
+    // to an effect can get the lock request rejected on some Android browsers.
+    const lockLandscape = () => {
+      const orientation = screen.orientation as ScreenOrientation & {
+        lock?: (o: string) => Promise<void>;
+      };
+      orientation?.lock?.("landscape")?.catch(() => undefined);
+    };
+
     // Fullscreen the CONTAINER (not the raw <video>) so our custom controls
     // ride along. Desktop/Android/iPadOS support element fullscreen.
     if (node.requestFullscreen) {
-      node.requestFullscreen().catch(() => undefined);
+      node.requestFullscreen().then(lockLandscape).catch(() => undefined);
     } else if (node.webkitRequestFullscreen) {
       node.webkitRequestFullscreen();
+      lockLandscape();
     } else if (video?.webkitEnterFullscreen) {
       // iPhone Safari can't fullscreen a wrapper <div> — only the <video> itself.
       // Fall back to the native video player there (real fullscreen + landscape).

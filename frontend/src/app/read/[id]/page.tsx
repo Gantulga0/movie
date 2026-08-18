@@ -283,8 +283,14 @@ function Reader() {
     // svh (not vh): iOS Safari's dynamic toolbars make 100vh overshoot the
     // visible area, leaving a phantom gap at the bottom of the reader.
     <div className="min-h-svh bg-background pb-[env(safe-area-inset-bottom)]">
-      {/* Top bar */}
-      <header className="sticky top-0 z-40 border-b border-line bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur">
+      {/* viewport-fit=cover lets text scroll behind the iOS status bar — keep
+          that zone solid so the reader never shows through it. */}
+      <div
+        aria-hidden
+        className="fixed inset-x-0 top-0 z-50 h-[env(safe-area-inset-top)] bg-background"
+      />
+      {/* Top bar — fully opaque so scrolled text never bleeds through. */}
+      <header className="sticky top-0 z-40 border-b border-line bg-background pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-5 py-3">
           <button
             type="button"
