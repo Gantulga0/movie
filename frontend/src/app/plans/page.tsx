@@ -229,7 +229,7 @@ function PlansContent() {
         <PaymentModal
           open
           onClose={() => setCheckout(null)}
-          title="wire.mn төлбөр"
+          title="Shiwnee төлбөр"
           subtitle={checkout.plan.name}
           amount={checkout.amount}
           paymentId={checkout.paymentId}
@@ -238,7 +238,7 @@ function PlansContent() {
           successContent={
             <div>
               <p className="text-sm text-muted">
-                {checkout.plan.name} багц идэвхжлээ. Сайхан үзээрэй!
+                {checkout.plan.name} багц идэвхжлээ.
               </p>
               <Button
                 variant="primary"
