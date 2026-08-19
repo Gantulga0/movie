@@ -101,7 +101,7 @@ function RentTicketCard({
       <div className="flex items-center gap-2 text-gold">
         <IconTicket size={17} />
         <span className="text-[11px] font-bold uppercase tracking-[0.18em]">
-          Нэг удаагийн билет
+          Нэг удаа үзэх
         </span>
       </div>
 
@@ -179,7 +179,7 @@ function SubscriptionPassCard({
       </p>
       <p className="mt-1.5 text-xs leading-relaxed text-muted">
         {cheapest && cheapest.genreSlugs.length > 0
-          ? `«${cheapest.name}» багц энэ контентыг нээнэ.`
+          ? `${cheapest.name} багц энэ контентыг нээнэ.`
           : "Багцад орсон бүх контентыг хязгааргүй үзнэ."}
       </p>
 
