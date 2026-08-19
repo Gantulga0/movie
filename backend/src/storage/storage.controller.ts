@@ -16,8 +16,8 @@ import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { diskStorage } from 'multer';
 import { randomBytes } from 'crypto';
 import { mkdirSync } from 'fs';
-import { extname, join } from 'path';
-import { StorageService, localUploadRoot } from './storage.service';
+import { join } from 'path';
+import { StorageService, localUploadRoot, extForMime } from './storage.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -55,10 +55,21 @@ const localVideoStorage = diskStorage({
     cb(null, dir);
   },
   filename: (_req, file, cb) => {
-    const ext = extname(file.originalname) || '';
+    // Extension from the MIME type, never the client filename — an "evil.html"
+    // upload can't land as HTML the frontend would serve and execute.
+    const ext = extForMime(file.mimetype);
     cb(null, `${Date.now()}-${randomBytes(8).toString('hex')}${ext}`);
   },
 });
+
+/** Reject non-video uploads before multer writes them to disk. */
+const videoFileFilter = (
+  _req: unknown,
+  file: Express.Multer.File,
+  cb: (error: Error | null, accept: boolean) => void,
+) => {
+  cb(null, /^video\//.test(file.mimetype));
+};
 
 @Controller('storage')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -96,7 +107,7 @@ export class StorageController {
    */
   @Post('presign')
   presign(@Body() dto: PresignDto) {
-    return this.storage.presign(dto.folder, dto.filename, dto.contentType);
+    return this.storage.presign(dto.folder, dto.contentType);
   }
 
   /** Local-mode video/trailer upload (?folder=videos|trailers). */
@@ -104,6 +115,7 @@ export class StorageController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: localVideoStorage,
+      fileFilter: videoFileFilter,
       limits: { fileSize: 4 * 1024 * 1024 * 1024 }, // 4 GB
     }),
   )

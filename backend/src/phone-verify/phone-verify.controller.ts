@@ -1,8 +1,6 @@
 import {
-  Body,
   Controller,
   Get,
-  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -17,7 +15,6 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { SafeUser } from '../users/users.service';
 import { PhoneVerificationService } from './phone-verification.service';
 import { VerifyMnService } from './verify-mn.service';
-import { StartVerificationDto } from './dto/start-verification.dto';
 
 // Opening a session sends the user an SMS prompt — throttle like the OTP routes.
 const START_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
@@ -33,15 +30,21 @@ export class PhoneVerifyController {
   @Post('start')
   @UseGuards(JwtAuthGuard)
   @Throttle(START_THROTTLE)
-  start(@CurrentUser() user: SafeUser, @Body() dto: StartVerificationDto) {
-    return this.verification.start(dto.phone, { userId: user.id });
+  start(@CurrentUser() user: SafeUser) {
+    // Always verify the account's OWN phone — never a client-supplied number.
+    // Otherwise a user could mark their account "verified" with a burner phone.
+    return this.verification.start(user.phone, { userId: user.id });
   }
 
   /** Client polls this to learn whether the user's SMS has landed. */
   @Get('status/:sessionId')
   @UseGuards(JwtAuthGuard)
-  status(@Param('sessionId') sessionId: string) {
-    return this.verification.checkStatus(sessionId);
+  async status(
+    @CurrentUser() user: SafeUser,
+    @Param('sessionId') sessionId: string,
+  ) {
+    // Scope the lookup to the caller so one user can't poll another's session.
+    return this.verification.checkStatusForUser(sessionId, user.id);
   }
 
   /**
@@ -52,14 +55,10 @@ export class PhoneVerifyController {
    */
   @Get('callback/:ref')
   @HttpCode(HttpStatus.OK)
-  callback(
-    @Param('ref') ref: string,
-    @Req() req: Request,
-    @Headers('x-forwarded-for') forwardedFor: string,
-  ) {
-    // Behind Render's proxy the real client IP is the first X-Forwarded-For hop.
-    const clientIp = forwardedFor?.split(',')[0]?.trim() || req.ip;
-    this.verifyMn.assertAllowedIp(clientIp);
+  callback(@Param('ref') ref: string, @Req() req: Request) {
+    // `trust proxy` (main.ts) makes req.ip the real client, not a spoofable
+    // X-Forwarded-For hop — the only control on this unauthenticated route.
+    this.verifyMn.assertAllowedIp(req.ip);
     return this.verification.handleCallback(ref);
   }
 }

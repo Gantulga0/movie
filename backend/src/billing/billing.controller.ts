@@ -75,14 +75,13 @@ export class BillingController {
   wireWebhook(
     @Req() req: RawBodyRequest<Request>,
     @Headers('wirepayment-signature') signature: string,
-    @Headers('x-forwarded-for') forwardedFor: string,
   ) {
-    // Behind Render's proxy the real client IP is the first X-Forwarded-For hop.
-    const clientIp = forwardedFor?.split(',')[0]?.trim() || req.ip;
+    // `trust proxy` (main.ts) makes req.ip the real client, not a spoofable
+    // X-Forwarded-For hop. The HMAC signature is the primary gate regardless.
     return this.billing.handleWireWebhook(
       req.rawBody ?? Buffer.from(''),
       signature,
-      clientIp,
+      req.ip,
     );
   }
 }

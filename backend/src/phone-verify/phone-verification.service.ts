@@ -135,6 +135,36 @@ export class PhoneVerificationService {
   }
 
   /**
+   * Claim a VERIFIED session so a leaked sessionId can't be replayed to mint
+   * fresh sign-in tokens. Returns false if it was already claimed.
+   */
+  async claim(sessionId: string): Promise<boolean> {
+    const res = await this.prisma.phoneVerification.updateMany({
+      where: { sessionId, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    return res.count > 0;
+  }
+
+  /**
+   * Status for a session, scoped to its owning user — blocks one signed-in
+   * user from polling another user's verification session.
+   */
+  async checkStatusForUser(
+    sessionId: string,
+    userId: string,
+  ): Promise<{ status: PhoneVerificationStatus; verified: boolean }> {
+    const row = await this.prisma.phoneVerification.findUnique({
+      where: { sessionId },
+      select: { userId: true },
+    });
+    if (!row || row.userId !== userId) {
+      throw new BadRequestException('Session олдсонгүй');
+    }
+    return this.checkStatus(sessionId);
+  }
+
+  /**
    * Open a fresh session for an existing one's phone/user/purpose — the MO-SMS
    * equivalent of "resend code" (e.g. after expiry). Returns a new prompt.
    */

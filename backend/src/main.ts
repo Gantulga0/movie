@@ -13,6 +13,12 @@ async function bootstrap() {
   });
   const config = app.get(ConfigService);
 
+  // Behind Render's (single) proxy: trust the first hop so `req.ip` is the real
+  // client address. Without this, rate limiting keys every request on the
+  // proxy IP (one shared bucket) and the webhook/callback IP allow-lists read a
+  // spoofable left-most X-Forwarded-For hop.
+  app.set('trust proxy', 1);
+
   // Novel chapter bodies exceed Express's 100kb JSON default.
   app.useBodyParser('json', { limit: '2mb' });
 

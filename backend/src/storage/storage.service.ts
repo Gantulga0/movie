@@ -14,7 +14,56 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomBytes } from 'crypto';
 import { mkdir, unlink, writeFile } from 'fs/promises';
-import { extname, join, normalize, resolve, sep } from 'path';
+import { join, normalize, resolve, sep } from 'path';
+
+/** Stored file extension is derived from the (validated) MIME type, never the
+ *  client filename — a spoofed "evil.html" can't be served as HTML. */
+const EXT_BY_MIME: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/avif': '.avif',
+  'video/mp4': '.mp4',
+  'video/webm': '.webm',
+  'video/quicktime': '.mov',
+  'video/x-matroska': '.mkv',
+  'text/vtt': '.vtt',
+  'application/x-subrip': '.srt',
+};
+
+export function extForMime(mimeType: string): string {
+  return EXT_BY_MIME[mimeType] ?? '.bin';
+}
+
+/** True when the buffer's leading bytes match the claimed image MIME type —
+ *  defeats a text/HTML payload uploaded with a spoofed image Content-Type. */
+export function isValidImageSignature(buf: Buffer, mimeType: string): boolean {
+  if (buf.length < 12) return false;
+  switch (mimeType) {
+    case 'image/jpeg':
+      return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+    case 'image/png':
+      return (
+        buf[0] === 0x89 &&
+        buf[1] === 0x50 &&
+        buf[2] === 0x4e &&
+        buf[3] === 0x47
+      );
+    case 'image/webp':
+      return (
+        buf.toString('ascii', 0, 4) === 'RIFF' &&
+        buf.toString('ascii', 8, 12) === 'WEBP'
+      );
+    case 'image/avif':
+      // ISO-BMFF: "ftyp" box at offset 4, an AVIF-family brand at offset 8.
+      return (
+        buf.toString('ascii', 4, 8) === 'ftyp' &&
+        ['avif', 'avis', 'mif1', 'mif1'].includes(buf.toString('ascii', 8, 12))
+      );
+    default:
+      return false;
+  }
+}
 
 export interface UploadResult {
   key: string;
@@ -122,14 +171,19 @@ export class StorageService {
     return this.client;
   }
 
-  private buildFilename(originalName: string): string {
-    const ext = extname(originalName) || '';
-    return `${Date.now()}-${randomBytes(8).toString('hex')}${ext}`;
+  private buildFilename(mimeType: string): string {
+    return `${Date.now()}-${randomBytes(8).toString('hex')}${extForMime(mimeType)}`;
   }
 
   /** Upload a small file buffer (images) — R2 when configured, else disk. */
   async upload(file: Express.Multer.File, folder: string): Promise<UploadResult> {
-    const filename = this.buildFilename(file.originalname);
+    // Content sniffing: the ParseFilePipe only checks the client-set MIME; here
+    // we confirm the bytes really are that image, blocking HTML/SVG smuggled in
+    // under an image Content-Type (stored XSS on the public /uploads origin).
+    if (!isValidImageSignature(file.buffer, file.mimetype)) {
+      throw new BadRequestException('Зургийн файл танигдсангүй');
+    }
+    const filename = this.buildFilename(file.mimetype);
     const key = `${folder}/${filename}`;
 
     if (!this.r2Configured) {
@@ -245,12 +299,9 @@ export class StorageService {
     }
   }
 
-  /** Direct-to-R2 upload URL for large files. R2 mode only. */
-  async presign(
-    folder: string,
-    filename: string,
-    contentType: string,
-  ): Promise<PresignResult> {
+  /** Direct-to-R2 upload URL for large files. R2 mode only. The stored key's
+   *  extension comes from contentType, so the client filename is not used. */
+  async presign(folder: string, contentType: string): Promise<PresignResult> {
     if (!PRESIGN_FOLDERS.has(folder)) {
       throw new BadRequestException('Invalid upload folder');
     }
@@ -260,7 +311,7 @@ export class StorageService {
       );
     }
 
-    const key = `${folder}/${this.buildFilename(filename)}`;
+    const key = `${folder}/${this.buildFilename(contentType)}`;
     const uploadUrl = await getSignedUrl(
       this.getClient(),
       new PutObjectCommand({

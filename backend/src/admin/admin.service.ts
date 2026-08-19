@@ -9,6 +9,18 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 
 const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 100;
+
+/** Query strings are `Number()`'d upstream and can arrive as NaN or absurd
+ *  values; clamp so `?limit=99999999` can't DoS and `?page=abc` can't reach
+ *  Prisma as `skip: NaN`. */
+function clampPage(v?: number): number {
+  return Number.isFinite(v) && (v as number) >= 1 ? Math.floor(v as number) : 1;
+}
+function clampLimit(v?: number): number {
+  if (!Number.isFinite(v)) return DEFAULT_PAGE_SIZE;
+  return Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(v as number)));
+}
 
 /** Fields safe to show in admin lists (passwordHash never leaves the DB). */
 const userSelect = {
@@ -96,8 +108,8 @@ export class AdminService {
 
   /** Search matches the 6-digit publicId, email, phone or name. */
   async listUsers(params: { search?: string; page?: number; limit?: number }) {
-    const page = params.page ?? 1;
-    const limit = params.limit ?? DEFAULT_PAGE_SIZE;
+    const page = clampPage(params.page);
+    const limit = clampLimit(params.limit);
 
     const where: Prisma.UserWhereInput = params.search
       ? {
@@ -190,8 +202,8 @@ export class AdminService {
     page?: number;
     limit?: number;
   }) {
-    const page = params.page ?? 1;
-    const limit = params.limit ?? DEFAULT_PAGE_SIZE;
+    const page = clampPage(params.page);
+    const limit = clampLimit(params.limit);
 
     const where: Prisma.PaymentWhereInput = {
       ...(params.status ? { status: params.status } : {}),

@@ -23,6 +23,9 @@ import { SafeUser } from '../users/users.service';
 // Endpoints that open a (paid) verify.mn session get a tighter rate limit;
 // status polls run on the default global limit so 3s polling isn't blocked.
 const VERIFY_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
+// Login/reset are per-IP (trust proxy is set): tight enough to stop password
+// spraying, loose enough not to lock out a NAT'd office/carrier of real users.
+const LOGIN_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
 
 @Controller('auth')
 export class AuthController {
@@ -51,6 +54,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle(LOGIN_THROTTLE)
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto);
   }
@@ -71,6 +75,7 @@ export class AuthController {
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle(LOGIN_THROTTLE)
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.auth.resetPassword(dto);
   }
@@ -86,8 +91,8 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  async logout(@Body() dto: LogoutDto) {
-    await this.auth.revokeRefreshToken(dto.refreshToken);
+  async logout(@CurrentUser() user: SafeUser, @Body() dto: LogoutDto) {
+    await this.auth.revokeRefreshToken(user.id, dto.refreshToken);
     return { success: true };
   }
 

@@ -50,6 +50,13 @@ export interface VerifyStatusResult {
  */
 @Injectable()
 export class AuthService {
+  /** A valid bcrypt hash no user password matches — compared against on the
+   *  login "unknown identifier" path to keep response timing uniform. */
+  private readonly dummyPasswordHash = bcrypt.hashSync(
+    'login-timing-equalizer',
+    12,
+  );
+
   constructor(
     private readonly users: UsersService,
     private readonly phoneVerification: PhoneVerificationService,
@@ -109,8 +116,28 @@ export class AuthService {
     if (!verified) return { status, verified: false };
 
     const row = await this.phoneVerification.find(sessionId);
-    if (!row?.userId) {
-      // Verified but not linked to an account (shouldn't happen via register).
+    // Only a fresh, unconsumed VERIFY session mints sign-in tokens. A RESET
+    // session belongs to the reset flow (never issues tokens here), a consumed
+    // one is spent, and one verified long ago is stale — together these stop a
+    // leaked sessionId from being replayed into an account takeover. The window
+    // runs from verification (not session creation) so a slow texter isn't cut
+    // off at the ~300s session boundary.
+    const TOKEN_WINDOW_MS = 15 * 60 * 1000;
+    const freshlyVerified =
+      row?.verifiedAt != null
+        ? Date.now() - row.verifiedAt.getTime() <= TOKEN_WINDOW_MS
+        : row != null && row.expiresAt >= new Date();
+    if (
+      !row?.userId ||
+      row.purpose !== PhoneVerifyPurpose.VERIFY ||
+      row.consumedAt !== null ||
+      !freshlyVerified
+    ) {
+      return { status, verified: true };
+    }
+    // Claim the session so it can issue tokens exactly once.
+    const claimed = await this.phoneVerification.claim(sessionId);
+    if (!claimed) {
       return { status, verified: true };
     }
     const user = await this.users.markVerified(row.userId);
@@ -124,11 +151,14 @@ export class AuthService {
 
   async login(dto: LoginDto): Promise<AuthResult | PendingVerification> {
     const user = await this.users.findByIdentifier(dto.identifier.trim());
-    if (!user) {
-      throw new UnauthorizedException('Нэвтрэх мэдээлэл буруу байна');
-    }
-    const valid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!valid) {
+    // Always run one bcrypt comparison — against a fixed dummy hash when the
+    // identifier is unknown — so login takes the same time whether or not the
+    // account exists (no timing side-channel to enumerate users).
+    const valid = await bcrypt.compare(
+      dto.password,
+      user?.passwordHash ?? this.dummyPasswordHash,
+    );
+    if (!user || !valid) {
       throw new UnauthorizedException('Нэвтрэх мэдээлэл буруу байна');
     }
 
@@ -177,17 +207,29 @@ export class AuthService {
    * session (one-time) proves phone ownership, so it also signs the user in.
    */
   async resetPassword(dto: ResetPasswordDto): Promise<AuthResult> {
-    const { phone } = await this.phoneVerification.consume(
+    const { userId, phone } = await this.phoneVerification.consume(
       dto.sessionId,
       PhoneVerifyPurpose.RESET,
     );
-    const user = await this.users.findByPhone(phone);
+    // Resolve by the session's bound userId (reliable); fall back to the phone
+    // only for legacy sessions that predate userId binding. Using userId avoids
+    // phone-format mismatches ("99112233" vs "+97699112233") resolving wrong.
+    const user = userId
+      ? await this.prisma.user.findUnique({ where: { id: userId } })
+      : await this.users.findByPhone(phone);
     if (!user) {
       throw new NotFoundException('Хэрэглэгч олдсонгүй');
     }
 
     const passwordHash = await bcrypt.hash(dto.newPassword, 12);
     const updated = await this.users.updatePassword(user.id, passwordHash);
+
+    // Changing the password ends every existing session: revoke all refresh
+    // tokens so a prior compromise can't keep refreshing after the reset.
+    await this.prisma.refreshToken.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
 
     // A successful reset also proves ownership of the phone.
     const verified = updated.verified ? updated : await this.users.markVerified(user.id);
@@ -238,7 +280,17 @@ export class AuthService {
       where: { tokenHash: this.hashToken(rawToken) },
       include: { user: true },
     });
-    if (!record || record.revokedAt || record.expiresAt < new Date()) {
+    if (!record || record.expiresAt < new Date()) {
+      throw new UnauthorizedException('Сессийн хугацаа дууссан. Дахин нэвтэрнэ үү.');
+    }
+    // Reuse of an ALREADY-rotated token signals theft (the real client and the
+    // thief both hold a copy of the same token). Kill the whole family so
+    // neither side keeps a working session.
+    if (record.revokedAt) {
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: record.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
       throw new UnauthorizedException('Сессийн хугацаа дууссан. Дахин нэвтэрнэ үү.');
     }
     // Rotation: retire the presented token before issuing the next one.
@@ -249,12 +301,17 @@ export class AuthService {
     return this.buildResult(record.user);
   }
 
-  /** Revoke a refresh token on logout. Silent if it's already gone. */
-  async revokeRefreshToken(rawToken?: string): Promise<void> {
-    if (!rawToken) return;
+  /**
+   * Log out the caller. Revokes the presented refresh token (scoped to the
+   * user so nobody can revoke another account's token), or, if none is given,
+   * every active token for the user — so logout always ends the session.
+   */
+  async revokeRefreshToken(userId: string, rawToken?: string): Promise<void> {
     await this.prisma.refreshToken
       .updateMany({
-        where: { tokenHash: this.hashToken(rawToken), revokedAt: null },
+        where: rawToken
+          ? { userId, tokenHash: this.hashToken(rawToken), revokedAt: null }
+          : { userId, revokedAt: null },
         data: { revokedAt: new Date() },
       })
       .catch(() => undefined);
