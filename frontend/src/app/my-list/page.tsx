@@ -84,7 +84,7 @@ function MyListContent() {
           <EmptyState
             icon={<IconBookmark size={40} />}
             title="Жагсаалт хоосон байна"
-            description="Кино, цувралын карт дээрх «Жагсаалт» товчоор дуртай контентоо энд хадгалаарай."
+            description="Кино, цувралын карт дээрх Жагсаал товчоор дуртай контентоо энд хадгалаарай."
             action={
               <ButtonLink href="/browse" variant="accent">
                 Кино хайж эхлэх

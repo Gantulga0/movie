@@ -171,8 +171,8 @@ function SearchContent() {
           ) : results && results.length === 0 ? (
             <EmptyState
               icon={<IconSearch size={40} />}
-              title={`«${query.trim()}» олдсонгүй`}
-              description="Өөр түлхүүр үгээр хайж үзээрэй — нэрийг нь монголоор ч, эх хэлээр нь ч хайж болно."
+              title={`${query.trim()} олдсонгүй`}
+              description="Өөр түлхүүр үгээр хайж үзээрэй."
             />
           ) : results ? (
             <>

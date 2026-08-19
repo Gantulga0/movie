@@ -41,9 +41,11 @@ function HomeContent() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [newest, setNewest] = useState<Content[]>([]);
   const [newestLoading, setNewestLoading] = useState(true);
-  const [novels, setNovels] = useState<Content[]>([]);
-  const [novelsLoading, setNovelsLoading] = useState(true);
   const [genreRows, setGenreRows] = useState<
+    Array<{ genre: Genre; items: Content[] }>
+  >([]);
+  // Novels split into one rail per genre, just like movies — never one big pile.
+  const [novelGenreRows, setNovelGenreRows] = useState<
     Array<{ genre: Genre; items: Content[] }>
   >([]);
   const [genresLoading, setGenresLoading] = useState(true);
@@ -62,38 +64,49 @@ function HomeContent() {
       .catch(() => setNewest([]))
       .finally(() => setNewestLoading(false));
 
-    // Novels get their own rail — they don't belong in the movie genre rows.
-    contentApi
-      .list({ type: "NOVEL", sort: "new", limit: ROW_ITEM_LIMIT })
-      .then((res) => setNovels(res.items))
-      .catch(() => setNovels([]))
-      .finally(() => setNovelsLoading(false));
-
-    // Genre rails come from real genre data; empty genres are dropped.
-    // Check every genre first, THEN cap the row count — slicing before the
-    // content check can land on 8 empty genres and render nothing at all.
+    // Genre rails come from real genre data; empty genres are dropped. Movies
+    // and novels each get their own set of per-genre rails. Check every genre
+    // for content first, THEN cap the count — slicing before the content check
+    // can land on empty genres and render nothing at all.
     contentApi
       .genres()
       .then(async (genres) => {
+        const isNovelGenre = (g: Genre) => g.types?.includes("NOVEL") ?? false;
         const movieGenres = genres.filter(
           (g) =>
             !g.types?.length ||
             g.types.includes("MOVIE") ||
             g.types.includes("SERIES"),
         );
-        const rows = await Promise.all(
-          movieGenres.map(async (genre) => {
-            const res = await contentApi
-              .list({ genre: genre.slug, limit: ROW_ITEM_LIMIT })
-              .catch(() => null);
-            return { genre, items: res?.items ?? [] };
-          }),
-        );
-        setGenreRows(
-          rows.filter((r) => r.items.length > 0).slice(0, GENRE_ROW_LIMIT),
-        );
+        const novelGenres = genres.filter(isNovelGenre);
+
+        // One rail per genre, keeping only those that actually hold content.
+        const buildRows = async (
+          list: Genre[],
+          type?: "NOVEL",
+        ): Promise<Array<{ genre: Genre; items: Content[] }>> => {
+          const rows = await Promise.all(
+            list.map(async (genre) => {
+              const res = await contentApi
+                .list({ genre: genre.slug, type, limit: ROW_ITEM_LIMIT })
+                .catch(() => null);
+              return { genre, items: res?.items ?? [] };
+            }),
+          );
+          return rows.filter((r) => r.items.length > 0);
+        };
+
+        const [movieRows, novelRows] = await Promise.all([
+          buildRows(movieGenres),
+          buildRows(novelGenres, "NOVEL"),
+        ]);
+        setGenreRows(movieRows.slice(0, GENRE_ROW_LIMIT));
+        setNovelGenreRows(novelRows);
       })
-      .catch(() => setGenreRows([]))
+      .catch(() => {
+        setGenreRows([]);
+        setNovelGenreRows([]);
+      })
       .finally(() => setGenresLoading(false));
   }, [user]);
 
@@ -174,13 +187,18 @@ function HomeContent() {
         ))}
       </ContentRow>
 
-      {novelsLoading || novels.length > 0 ? (
+      {/* Novels, one rail per genre (e.g. "Нэрээ нууцалсан захидал") */}
+      {novelGenreRows.map(({ genre, items }) => (
         <ContentRow
-          title="Өгүүллэг"
-          viewAllHref="/browse?type=NOVEL"
-          loading={novelsLoading}
+          key={genre.id}
+          title={
+            genre.name.includes("өгүүллэг")
+              ? genre.name
+              : `${genre.name} (өгүүллэг)`
+          }
+          viewAllHref={`/browse?type=NOVEL&genre=${genre.slug}`}
         >
-          {novels.map((content) => (
+          {items.map((content) => (
             <ContentCard
               key={content.id}
               content={content}
@@ -188,7 +206,7 @@ function HomeContent() {
             />
           ))}
         </ContentRow>
-      ) : null}
+      ))}
 
       {genresLoading ? (
         <ContentRow title="Ангилал" loading>
